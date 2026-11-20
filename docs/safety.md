@@ -6,7 +6,7 @@
 
 - [ ] Props on the right motors (CW and CCW) and tight. No chips or cracks.
 - [ ] All 4 arms sitting **on their stops**, with the magnets touching. Check this by eye: the robot can't sense the arms, it only knows it commanded them there.
-- [ ] The face shows `FLY` (the knee servos are switched off in this mode).
+- [ ] The app shows `FLY` (the knee servos are switched off in this mode).
 - [ ] Battery strap tight, battery voltage above 3.7 V per cell.
 - [ ] Failsafe tested this session: arm with **props off**, then turn the phone's WiFi off. The motors should drop to failsafe throttle and stop after about 3 s.
 - [ ] Open space, nobody within 5 m, not over people or roads, local drone rules followed.

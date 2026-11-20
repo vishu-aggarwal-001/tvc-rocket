@@ -2,7 +2,7 @@
 
 You'll need the parts from the README BOM, a small Phillips driver, 1.5 and 2 mm hex keys, a soldering iron, CA glue and zip ties.
 
-**Leg names** (seen from above, face at the front):
+**Leg names** (seen from above, USB-C slot in the canopy at the front):
 
 | Leg | Number |
 |---|---|
@@ -55,23 +55,22 @@ If the horn sits below flush, add a `leg_spacer`.
 
 ## 5. Motors and feet
 
-1. Bolt each motor onto the pad with M2 screws from below. Both 9×9 and 12×12 patterns are drilled.
+1. Bolt each motor onto the pad with M2 screws from below. The four slots fit 9 mm-circle, 9×9 and 12×12 patterns. Use screws that don't touch the motor windings (check the depth before tightening).
 2. Run the motor wires along the shin's lower edge and through the wire channel, leaving slack around the knee. Use a zip tie at the coxa.
 3. Push a TPU `foot_tpu` boot onto each toe.
 
 ## 6. Electronics
 
-1. Mount the FC on the 20×20 standoffs in the deck with M2 screws and soft grommets, **arrow towards the face**.
+1. Mount the FC on the 20×20 standoffs in the deck with M2 screws and soft grommets, **arrow towards the front** (the USB-C slot side).
 2. Zip-tie the ESP32-S3 into the deck slots.
 3. Mount the UBEC under the deck.
-4. Press the OLED into the pocket behind the face window in the `canopy` head, then add a drop of glue at the corners.
-5. Wire everything according to the table in the README.
-6. Put a 3-pin header strip on a small perfboard as a **servo power bus**:
+4. Wire everything according to the table in the README.
+5. Put a 3-pin header strip on a small perfboard as a **servo power bus**:
    - all servo V+ to UBEC 5 V
    - all servo GND to UBEC GND, which is joined to the FC and ESP32 grounds
    - signals to the ESP32 pins
-7. Strap the battery under the belly through the slots in `chassis_bottom`.
-8. Screw the canopy onto the deck with 4× M2×8 screws.
+6. Strap the battery under the belly through the slots in `chassis_bottom`.
+7. Screw the canopy onto the deck with 4× M2×8 screws.
 
 ## 7. Calibrate (props off)
 

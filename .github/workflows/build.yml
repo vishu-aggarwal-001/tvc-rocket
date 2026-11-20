@@ -14,8 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install cadquery
+      - run: pip install cadquery trimesh pymeshfix
       - run: python cad/skycrawler.py
+      - run: python tools/make_parts_html.py      # stl/parts.html: offline 3D preview of every part
       - run: cd stl && zip -r ../SkyCrawler-stl.zip .
       - uses: actions/upload-artifact@v4
         with: { name: stl, path: SkyCrawler-stl.zip }

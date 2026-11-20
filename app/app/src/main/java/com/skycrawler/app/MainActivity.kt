@@ -41,9 +41,7 @@ class MainActivity : Activity(), RobotLink.Listener {
     private var mode = "SIT"
     private var armed = false
     private var trot = false
-    private var faceIdx = 0
     private var beeper = false
-    private val faces = arrayOf("happy", "love", "wink", "angry", "surprised", "sad", "sleepy", "focus")
     private val trims = Array(4) { floatArrayOf(0f, 0f) }
 
     private val ORANGE = Color.parseColor("#FF7A1A")
@@ -112,7 +110,6 @@ class MainActivity : Activity(), RobotLink.Listener {
         walkPanel.addView(row(btn("Stand") { link.cmd("stand") }, btn("Sit") { link.cmd("sit") }))
         walkPanel.addView(gaitBtn)
         walkPanel.addView(row(btn("👋 Wave") { link.cmd("trick", "wave") }, btn("💃 Dance") { link.cmd("trick", "dance") }, btn("🙇 Bow") { link.cmd("trick", "bow") }))
-        walkPanel.addView(btn("Face: ${faces[0]}") { faceIdx = (faceIdx + 1) % faces.size; link.cmd("face", faces[faceIdx]); toast("Face: ${faces[faceIdx]}") })
         walkPanel.addView(btn("✈  Transform to DRONE", ORANGE) { confirm("Transform to drone?", "Put the robot on flat open ground. The legs fold out onto their stops; propellers stay off until you arm.") { link.cmd("fly") } })
 
         // centre: fly controls

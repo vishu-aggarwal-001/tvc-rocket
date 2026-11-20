@@ -10,12 +10,12 @@ A 3D-printed quadruped robot that walks on four legs and then folds its legs out
 
 | Folder | What it is |
 |---|---|
-| [`stl/`](stl) | Print-ready STL and STEP files, already oriented flat on the bed |
+| [`stl/`](stl) | Print-ready STL and STEP files, already oriented flat on the bed. Open **`stl/parts.html`** for a 3D preview of every part with its print settings |
 | [`cad/skycrawler.py`](cad/skycrawler.py) | The parametric CadQuery source. Change a number and every part regenerates |
-| [`firmware/`](firmware) | ESP32-S3 code (PlatformIO) for walking, the OLED face, WiFi and flight control |
+| [`firmware/`](firmware) | ESP32-S3 code (PlatformIO) for walking, WiFi and flight control |
 | [`app/`](app) | Android app (Kotlin) with twin joysticks, walk tricks, hold-to-arm and calibration |
-| [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly, with a blinking face and spinning props |
-| [Releases](../../releases) | Ready-made `SkyCrawler-x.y.z.apk`, the firmware `.bin` and a zip of the STLs |
+| [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly, with spinning props |
+| [`release/`](release) | Ready-made **`SkyCrawler-1.0.0.apk`**, the firmware **`skycrawler-esp32s3-full.bin`** and **`SkyCrawler-stl.zip`** (all STLs + `parts.html`). Tagging `v*` also makes CI publish them as a GitHub Release |
 
 > ⚠️ **Status: designed, not yet built.** The CAD has been checked in software for collisions across the full joint range. The firmware compiles and the APK builds. Nothing has been printed or flown yet. Fits are based on nominal MG90S dimensions, so expect to adjust tolerances once (see [Tuning the fit](#tuning-the-fit)). Please open an issue with what you find.
 
@@ -43,35 +43,33 @@ To switch to flying, the robot sits down, lowers each arm onto its stop and **sw
 | Arms flop or vibrate in flight | **Positive end stop**, plus a **6×3 mm magnet** to hold the arm and an **M3 levelling screw** to set each arm exactly level |
 | The battery hangs below the feet, so landings smash it | The **42 mm toe** clears the belly battery in drone mode. A **TPU boot** grips when walking and cushions landings |
 | Flight is either bolted-on or homemade | A real **Betaflight** flight controller does the stabilizing. The ESP32 talks to it as a CRSF receiver, so you get angle mode, auto-level, failsafe auto-land and a voltage readout |
-| Only one motor size fits | Both **9×9 and 12×12 mm** M2 motor patterns are drilled, so 1104 to 1404 class motors fit |
-| No personality, wiring on show | One-piece **canopy** with hex vents covers the electronics. A **head pod** with cat ears carries the **OLED face**: 8 moods, blinking, a sad face for low battery, and status text |
+| Only one motor size fits | **Slotted M2 motor mount** fits 9 mm-circle, 9×9 and 12×12 patterns, so any 1103–1404 motor fits |
+| Wiring on show | A low one-piece **canopy** with hex vents on top and slotted side vents covers the electronics. The ESP32's USB-C port stays reachable through the front |
 | Blocky, printed-looking parts | Tapered, filleted legs, a sleeve that wraps each knee servo, and a gusseted toe. The legs are 10 mm shorter, for a more compact stance |
 
 ---
 
 ## Parts list (BOM)
 
-Prices are rough 2026 AliExpress/Amazon prices in USD.
+**[`docs/SkyCrawler_parts_and_links.xlsx`](docs/SkyCrawler_parts_and_links.xlsx)** has every part with a buy link, price, a cheaper option where there is one, and a "Got it" column that keeps a running "still to buy" total. A second tab lists every printed part, each linked to its 3D preview on GitHub.
 
-| Qty | Part | Notes | ~$ |
-|---|---|---|---|
-| 8 | **MG90S** metal-gear micro servo | Comes with cross horns | 20 |
-| 1 | **ESP32-S3 SuperMini** | The brain | 5 |
-| 1 | **F4 AIO 1S–3S whoop FC with 4-in-1 ESC** (20×20 or 25.5 mm whoop pattern, e.g. BetaFPV F4 2-3S 20A AIO or HappyModel X12) | Any Betaflight 4.x board with a free UART | 35 |
-| 4 | **1204 / 1303 brushless motor, about 5000 KV** (or 1104 7500 KV for 2S) | 9×9 or 12×12 M2 pattern | 32 |
-| 4 | **2.5" (63 mm) 3-blade props** | 1.5 mm or matching shaft, 2 CW and 2 CCW | 3 |
-| 1 | **3S 450–550 mAh LiPo**, XT30 | Strapped under the belly | 12 |
-| 1 | **5 V 5 A UBEC** | Powers the servos and the ESP32. Do **not** use the FC's 5 V for the servos | 5 |
-| 1 | **SSD1306 0.96" I²C OLED** (128×64) | The face | 3 |
-| 1 | Active 5 V buzzer | Optional | 1 |
-| 1 | 100 kΩ + 22 kΩ resistors | Battery-voltage divider | — |
-| 4 | **6×3 mm N52 magnet pairs** | Knee stops (8 magnets in total) | 3 |
-| 4 | M3×10 set screw or bolt | Knee levelling screws | — |
-| ~40 | M2×6 / M2×8 screws, M2.5 for the servos, M3×6 | | 4 |
-| — | PETG or ASA filament (~80 g), TPU 95A (~5 g) | | 3 |
-| | | **Total** | **≈ $125** |
+The main parts (prices checked Nov 2026, USD):
 
-Estimated flying weight is about **300 g** with a 3S 450 (the eight servos alone are about 107 g). With four 1204 5000 KV motors on 2.5" props and 3S, expect a thrust-to-weight ratio of about **2:1**. That is plenty for gentle flying. With 1104 motors on 2S it's about 1.4:1, which is only just flyable.
+| Qty | Part | ~$ |
+|---|---|---|
+| 8 (10-pack) | **MG90S** metal-gear micro servo | 22 |
+| 1 (3-pack) | **ESP32-S3 SuperMini**, 4 MB | 19 |
+| 1 | **BETAFPV F4 2-3S 20A AIO** flight controller + ESC (26×26 mount; the deck also takes 20×20) | 55 |
+| 4 | **T-Motor F1204 5000 KV** motor (the slotted mount fits any 1103–1404 pattern) | 64 |
+| 2 packs | **Gemfan 2520 tri-blade 2.5"** props, 1.5 mm | 10 |
+| 2 | **GNB 3S 450 mAh** LiPo, XT30 | 30 |
+| 1 | **Matek BEC12S-Pro 5 A** regulator: powers the servos and the ESP32. Do **not** use the FC's 5 V for the servos | 19 |
+| — | Magnets (6×3 mm, 8 needed), M2/M3 screws and inserts, wire, XT30s, strap, buzzer, resistors | ≈ 80 |
+| — | PETG (~90 g) and TPU (~4 g) | — |
+
+All of it comes to **≈ $380** without tools, and **≈ $500** with a LiPo charger, adapter, safe bag and soldering iron. Several items come in packs, so you'll have spares.
+
+Estimated flying weight is about **300 g** with a 3S 450 (the eight servos alone are about 107 g). With four F1204 5000 KV motors on 2.5" props and 3S, expect a thrust-to-weight ratio of about **2:1**. That is plenty for gentle flying. With 1104 motors on 2S it's about 1.4:1, which is only just flyable.
 
 ---
 
@@ -83,9 +81,9 @@ All files in `stl/` are already oriented flat.
 |---|---|---|---|
 | `chassis_bottom` | 1 | PETG/ASA | 3 walls, 30 % gyroid, no supports |
 | `chassis_deck` | 1 | PETG/ASA | 3 walls, 30 %, no supports |
-| `canopy` (body shell + head) | 1 | PETG/PLA, white or any colour | 2 walls, 10 %. Print upright on its base with tree supports inside the roof and head |
+| `canopy` (body shell) | 1 | PETG/PLA, white or any colour | 2 walls, 10 %. Print upright on its base with tree supports under the roof |
 | `coxa` (upper leg) | 4 | PETG/ASA | **4 walls, 40 %**, supports for the knee-servo frame and the stop ledge |
-| `shin_arm` (lower leg / drone arm) | 4 | PETG/ASA | **4 walls, 40 %**, supports under the motor pad and toe |
+| `shin_arm` (lower leg / drone arm) | 4 | PETG/ASA | **4 walls, 40 %**. The file is already upside down (motor seat on the bed, toe up); tree supports under the arm and tail |
 | `foot_tpu` | 4 | TPU 95A | 2 walls, 20 % |
 | `leg_spacer` | 0–4 | any | Only if your horns sit low (see below) |
 
@@ -105,7 +103,6 @@ PLA works for a walking-only test. For flying, use PETG or ASA, because PLA arms
 |---|---|
 | GPIO 2 / 3 / 4 / 5 | Hip servo signal: front-right, front-left, back-left, back-right |
 | GPIO 6 / 7 / 8 / 9 | Knee servo signal (same leg order) |
-| GPIO 10 / 11 | OLED SDA / SCL |
 | GPIO 12 | Buzzer + |
 | GPIO 43 (TX) | FC **RX** pad of the UART you set to Serial RX |
 | GPIO 44 (RX) | FC **TX** pad of the same UART (telemetry) |
@@ -133,7 +130,7 @@ See **[docs/betaflight.md](docs/betaflight.md)**. It covers the exact CLI comman
 
 ## Flashing the firmware
 
-**Easiest:** download `skycrawler-esp32s3-full.bin` from Releases. Then either:
+**Easiest:** download [`release/skycrawler-esp32s3-full.bin`](release/skycrawler-esp32s3-full.bin). Then either:
 
 - open <https://espressif.github.io/esptool-js/> in Chrome, connect, and flash it at offset **0x0**, or
 - run:
@@ -151,7 +148,7 @@ Change `AP_PASS` in `config.h` before you build.
 
 ## The app
 
-Install `SkyCrawler-x.y.z.apk` from Releases. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
+Install [`release/SkyCrawler-1.0.0.apk`](release/SkyCrawler-1.0.0.apk) on the phone. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
 
 ```
 cd app
@@ -160,12 +157,12 @@ cd app
 
 The APK lands in `app/build/outputs/apk/release/`. To sign it with your own key, set the `SKY_KEYSTORE`, `SKY_KEYSTORE_PASSWORD`, `SKY_KEY_ALIAS` and `SKY_KEY_PASSWORD` environment variables.
 
-1. Power the robot. The face wakes up and shows `SkyCrawler-XXXX`.
+1. Power the robot. It beeps twice and starts a WiFi network called `SkyCrawler-XXXX`.
 2. Tap **Connect**. Android asks to join the robot's WiFi; the default password is `skycrawler`.
 3. **Walk panel:**
    - The left stick walks and turns.
    - The right stick tilts and raises the body.
-   - Other controls: Stand, Sit, creep/trot gait, Wave, Dance, Bow, Face.
+   - Other controls: Stand, Sit, creep/trot gait, Wave, Dance, Bow.
 4. **Transform → drone:** the robot sits, lays its arms on the stops and relaxes the knees. The fly panel appears.
 5. **Fly panel:**
    - Left stick is throttle and yaw (throttle doesn't spring back).
@@ -178,7 +175,7 @@ The APK lands in `app/build/outputs/apk/release/`. To sign it with your own key,
 - If WiFi drops while armed, the ESP32 stops sending CRSF frames and Betaflight's failsafe **auto-lands**.
 - You can't switch to walking while armed.
 - The knees are switched off in flight, so a servo glitch can't move an arm.
-- The battery-low check blocks arming, and the face goes sad when the battery is low.
+- The battery-low check blocks arming. The app shows the battery voltage.
 
 Read [docs/safety.md](docs/safety.md) before the first flight. **Always take the props off** for setup and calibration.
 
@@ -197,9 +194,9 @@ The output goes to `stl/` and `docs/viewer/assembly/`.
 |---|---|
 | Servos are too tight or loose in their slots | `SERVO['L']`, `SERVO['W']` (+0.2 mm per step) |
 | The horn doesn't sit flush in the leg's pocket | Print `leg_spacer`, or edit the horn pocket in `coxa()` / `shin()` |
-| You use a different motor | `MOTOR_HOLES`, `SHIN_TO_MOTOR` (prop clearance) |
+| You use a different motor | `MOTOR_SLOT` (the slots already fit 1103–1404 patterns), `SHIN_TO_MOTOR` (prop clearance) |
 | You want longer legs or a taller stance | `SHIN_LEN`, `TOE_LEN`, `COXA_LEN` |
-| Your FC uses the 25.5 mm whoop pattern | `FC_PATTERN` |
+| Your FC uses another mount | `FC_PATTERNS` (20×20 and 26×26 are built in) |
 
 The 3D viewer (`docs/viewer/index.html`) needs to be served, not opened as a file:
 
@@ -217,7 +214,6 @@ firmware/src/
   servos.cpp   rate-limited servo targets, trims in flash, relaxing the knees
   gait.cpp     creep (3 feet always down) and trot gaits, body height/tilt
   crsf.cpp     CRSF RC-channel frames to the FC at 100 Hz; battery and attitude telemetry back
-  face.cpp     SSD1306 eyes and moods
   net.cpp      WiFi access point, WebSocket :81, status page :80
 app/app/src/main/java/com/skycrawler/app/
   MainActivity.kt  UI, both panels, settings

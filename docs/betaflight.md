@@ -50,7 +50,7 @@ Betaflight's "landing" is not clever. It holds `failsafe_throttle` in angle mode
 
 ## 3. Board orientation and motors
 
-- **Front of the robot = the face side** (+Y in the CAD). Mount the FC with its arrow pointing at the face. If you have to rotate it, set *Board alignment* (`align_board_yaw`).
+- **Front of the robot = the side with the USB-C slot in the canopy** (+Y in the CAD). Mount the FC with its arrow pointing that way. If you have to rotate it, set *Board alignment* (`align_board_yaw`).
 - Betaflight motor order, seen from above:
 
   | Motor | Position | Spins |

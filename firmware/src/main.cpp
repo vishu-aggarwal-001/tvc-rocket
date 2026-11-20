@@ -1,12 +1,11 @@
 // SkyCrawler — a walking robot that turns into a quadcopter.
-// The ESP32-S3 is the robot's brain: it walks the legs, runs the transformation, draws
-// the face, talks to the phone app over WiFi and, in drone mode, drives the Betaflight
+// The ESP32-S3 is the robot's brain: it walks the legs, runs the transformation,
+// talks to the phone app over WiFi and, in drone mode, drives the Betaflight
 // flight controller over CRSF like a radio receiver. Betaflight does the flying.
 #include <Arduino.h>
 #include "config.h"
 #include "servos.h"
 #include "gait.h"
-#include "face.h"
 #include "crsf.h"
 #include "net.h"
 
@@ -16,7 +15,7 @@ static Mode mode = SIT;
 static int step = 0;               // sub-step inside a transformation
 static uint32_t stepT = 0;
 static bool armed = false, beeper = false;
-static uint32_t moodHoldUntil = 0, trickUntil = 0;
+static uint32_t trickUntil = 0;
 static String trickName;
 static float vbatAdc = 0;
 static int cells = 0;
@@ -50,7 +49,6 @@ static void onCmd(const char *c, const char *a, float v) {
   if (!strcmp(c, "disarm")) { armed = false; note = "disarmed"; return; }
   if (!strcmp(c, "beeper")) { beeper = v > 0.5f; return; }
   if (!strcmp(c, "gait")) { Gait::setKind(!strcmp(a, "trot") ? Gait::TROT : Gait::CREEP); return; }
-  if (!strcmp(c, "face")) { Face::Mood m; if (Face::fromName(a, m)) { Face::set(m); moodHoldUntil = millis() + 8000; } return; }
   if (!strcmp(c, "trick") && !armed && (mode == STAND || mode == SIT)) { trickName = a; trickUntil = millis() + 3500; setMode(TRICK); return; }
   if (!strcmp(c, "trim")) {
     int leg; float h, k;
@@ -74,7 +72,6 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   analogReadResolution(12);
   Servos::begin();
-  Face::begin();
   Crsf::begin(Serial1, PIN_CRSF_RX, PIN_CRSF_TX);
   Net::begin(onCmd);
   Servos::setRate(90);
@@ -154,36 +151,15 @@ static void sendCrsf() {
   Crsf::send(ch);
 }
 
-static void updateFace() {
-  static uint32_t last = 0;
-  if (millis() - last < 50) return;
-  last = millis();
-  if (millis() > moodHoldUntil) {
-    Face::Mood m = Face::HAPPY;
-    if (!Net::connected() && mode != SIT) m = Face::SURPRISED;
-    else if (mode == SIT) m = Face::SLEEPY;
-    else if (mode == TO_FLY || mode == TO_WALK) m = Face::SURPRISED;
-    else if (mode == FLY) m = armed ? Face::ANGRY : Face::FOCUS;
-    else if (mode == TRICK) m = trickName == "wave" ? Face::WINK : Face::LOVE;
-    if (cells && vbat() / cells < 3.5f) m = Face::SAD;
-    Face::set(m);
-  }
-  char line[22];
-  if (vbat() > 1) snprintf(line, sizeof line, "%s %.1fV", armed ? "ARMED" : MODE_NAMES[mode], vbat());
-  else snprintf(line, sizeof line, "%s", armed ? "ARMED" : MODE_NAMES[mode]);
-  Face::status(line);
-  Face::update();
-}
-
 static void telemetry() {
   static uint32_t last = 0;
   if (millis() - last < 200) return;
   last = millis();
   char js[256];
   snprintf(js, sizeof js,
-           "{\"t\":\"tel\",\"mode\":\"%s\",\"armed\":%s,\"vbat\":%.2f,\"cells\":%d,\"fc\":%s,\"face\":\"%s\",\"gait\":\"%s\",\"pitch\":%.1f,\"roll\":%.1f,\"note\":\"%s\"}",
+           "{\"t\":\"tel\",\"mode\":\"%s\",\"armed\":%s,\"vbat\":%.2f,\"cells\":%d,\"fc\":%s,\"gait\":\"%s\",\"pitch\":%.1f,\"roll\":%.1f,\"note\":\"%s\"}",
            MODE_NAMES[mode], armed ? "true" : "false", vbat(), cells, Crsf::fcAlive() ? "true" : "false",
-           Face::name(Face::get()), Gait::kind() == Gait::TROT ? "trot" : "creep", Crsf::pitchDeg(), Crsf::rollDeg(), note.c_str());
+           Gait::kind() == Gait::TROT ? "trot" : "creep", Crsf::pitchDeg(), Crsf::rollDeg(), note.c_str());
   Net::sendText(js);
   note = "";
 }
@@ -202,6 +178,5 @@ void loop() {
   runMode(dt);
   Servos::update(dt);
   sendCrsf();
-  updateFace();
   telemetry();
 }

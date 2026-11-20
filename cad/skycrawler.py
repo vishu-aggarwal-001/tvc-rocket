@@ -36,10 +36,11 @@ COXA_LEN = 34.0           # hip axis to knee axis
 SHIN_TO_MOTOR = 48.0      # knee axis to motor centre
 SHIN_LEN = 82.0           # knee axis to the toe
 TOE_LEN = 42.0            # the toe: a foot when walking, landing gear (clears the battery) when flying
-MOTOR_HOLES = [(9.0, 9.0), (12.0, 12.0)]   # 1104-1404 class motor patterns (M2), both drilled
+MOTOR_SEAT = 10.0        # motor seat height above the knee axis (drone pose)
+MOTOR_SLOT = (4.5, 8.5)   # M2 slots on the diagonals, radius 4.5..8.5: fits 9 mm-circle, 9x9 and 12x12 motor patterns
 M2_TAP, M2_CLR, M3_TAP, M3_CLR = 1.7, 2.3, 2.6, 3.3
 MAGNET = (6.2, 3.1)       # 6x3 mm neodymium disc pocket (d, depth)
-FC_PATTERN = 20.0         # 20x20 flight controller stack
+FC_PATTERNS = (20.0, 26.0)  # standoffs for 20x20 stacks and 26x26 (25.5) whoop-style AIO boards
 KNEE_FRAME_T = 3.0        # knee servo frame plate (tab plane at y = KNEE_FRAME_T)
 LEG_Y0 = KNEE_FRAME_T + SERVO['above_tab']   # inner face of the shin = top of the knee horn
 LEG_Y1 = LEG_Y0 + 8.0
@@ -124,8 +125,8 @@ def chassis_deck():
         d = d.cut(cq.Workplane('XY').center(x, y).circle(3.25).extrude(10, both=True))   # Ø6 pin bushing
     for (x, y) in [(0, 40), (0, -40), (40, 0), (-40, 0)]:
         d = d.cut(cq.Workplane('XY').center(x, y).circle(M3_CLR / 2).extrude(10, both=True))
-    # FC 20x20 standoffs (M2), slightly behind centre
-    fc = [(sx * FC_PATTERN / 2, -6 + sy * FC_PATTERN / 2) for sx in (-1, 1) for sy in (-1, 1)]
+    # FC standoffs (M2), slightly behind centre: 20x20 and 26x26 patterns
+    fc = [(sx * p / 2, -6 + sy * p / 2) for p in FC_PATTERNS for sx in (-1, 1) for sy in (-1, 1)]
     for (x, y) in fc:
         d = d.union(cq.Workplane('XY').center(x, y).circle(2.6).extrude(DECK_T + 4))
         d = d.cut(cq.Workplane('XY').center(x, y).circle(M2_TAP / 2).extrude(20, both=True))
@@ -142,56 +143,39 @@ def chassis_deck():
 
 
 def canopy():
-    """One-piece shell over the deck: a low sloped body with hex vents, and the HEAD
-    pod at the front with the OLED face and ears. Screws to the deck with 4x M2."""
+    """One-piece shell over the deck: a low, sloped body with hex vents on top and
+    slotted vents on the sides. Screws to the deck with 4x M2."""
     t = 1.8
-    BW, TW, TD, H = 78.0, 60.0, 56.0, 15.0          # base width, top width/depth, body height
-    HX, HY0, HY1, HH = 44.0, 9.0, 36.0, 36.0        # head: width, back/front y, height
+    BW, TW, TD, H = 78.0, 58.0, 58.0, 17.0          # base width, top width/depth, height
 
     def body(off):
         lo = (cq.Workplane('XY').placeSketch(rrect(BW - 2 * off, BW - 2 * off, 26 - off),
-                                             rrect(TW - 2 * off, TD - 2 * off, 17 - off).moved(cq.Location(cq.Vector(0, -3, H - off))))
+                                             rrect(TW - 2 * off, TD - 2 * off, 17 - off).moved(cq.Location(cq.Vector(0, 0, H - off))))
               .loft())
-        return soft(lo, '>Z', 6 - off * 0.8)
+        return soft(lo, '>Z', 7 - off)
 
-    def head(off):
-        hd = (cq.Workplane('XY').center(0, (HY0 + HY1) / 2)
-              .placeSketch(rrect(HX - 2 * off, HY1 - HY0 - 2 * off, 10 - off)).extrude(HH - off))
-        return soft(hd, '>Z', 7 - off)
-
-    outer = body(0).union(head(0))
-    inner = body(t).union(head(t)).translate((0, 0, -0.01))
+    outer, inner = body(0), body(t).translate((0, 0, -0.01))
     shell = outer.cut(inner)
-    # screw bosses: clipped to the inside of the shell
-    bosses = cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(3.2).extrude(HH)
+    # screw bosses, clipped to the inside of the shell
+    bosses = cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(3.2).extrude(H)
     shell = shell.union(bosses.intersect(inner))
-    shell = shell.cut(cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(M2_CLR / 2).extrude(HH + 1))
+    shell = shell.cut(cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(M2_CLR / 2).extrude(H + 1))
     # clear the coxa pins that poke through the deck
     shell = shell.cut(cq.Workplane('XY').pushPoints(HIPS).circle(5).extrude(6, both=True))
-    # OLED: face window (active area ~22x11) and the 27x28 PCB pocket behind it
-    fz = 21.0
-    shell = shell.cut(cq.Workplane('XZ', origin=(0, HY1 + 1, 0)).center(0, fz).placeSketch(rrect(26, 15, 3)).extrude(4))
-    shell = shell.cut(cq.Workplane('XZ', origin=(0, HY1 - t + 0.01, 0)).center(0, fz - 1).rect(28.0, 28.5).extrude(1.2))
-    # ears (rounded triangles, tilted out)
-    for sx in (-1, 1):
-        ear = (cq.Workplane('XZ', origin=(0, (HY0 + HY1) / 2 + 3, 0))
-               .polyline([(sx * 7, HH - 3), (sx * 19, HH - 3), (sx * 17, HH + 9)]).close().extrude(6))
-        ear = soft(ear, '|Y', 1.6)
-        shell = shell.union(ear)
-    # hex vents over the FC
+    # hex vents across the top
     pts = []
-    for row in range(4):
-        for col in range(-3, 4):
-            x = col * 6.4 + (3.2 if row % 2 else 0)
-            y = -26 + row * 5.6
-            if abs(x) < 22:
+    for row in range(7):
+        for col in range(-4, 5):
+            x, y = col * 6.4 + (3.2 if row % 2 else 0), -16.8 + row * 5.6
+            if abs(x) < 19 and abs(y) < 19:
                 pts.append((x, y))
     shell = shell.cut(cq.Workplane('XY').pushPoints(pts).polygon(6, 4.6).extrude(10).translate((0, 0, H - 4)))
-    # side vents on the head + USB-C access on the left
+    # slotted side vents (left/right) and USB-C access for the ESP32 at the front
     for sx in (-1, 1):
-        for i in range(3):
-            shell = shell.cut(cq.Workplane('YZ', origin=(sx * HX / 2 - 3, 0, 0)).center(18 + i * 5, 22).slot2D(10, 2.2, 90).extrude(6))
-    shell = shell.cut(cq.Workplane('YZ', origin=(-HX / 2 - 2, 0, 0)).center(22, 4.5).placeSketch(rrect(11, 5, 2)).extrude(6))
+        for i in range(4):
+            shell = shell.cut(cq.Workplane('YZ', origin=(sx * 40, 0, 0)).center(-10.5 + i * 7, 7.5)
+                              .slot2D(9, 2.6, 90).extrude(14, both=True))
+    shell = shell.cut(cq.Workplane('XZ', origin=(0, 42, 0)).center(0, 4.5).placeSketch(rrect(12, 5.5, 2)).extrude(10))
     return shell.translate((0, 0, Z_DECK + DECK_T))
 
 
@@ -215,7 +199,10 @@ def coxa():
     arm = (cq.Workplane('XZ').moveTo(6, z0).spline([(18, z0 - 2.5), (COXA_LEN - 7, z0 - 7)], includeCurrent=True)
            .lineTo(COXA_LEN - 7, z0 + COXA_T).lineTo(6, z0 + COXA_T).close().extrude(5, both=True))
     arm = soft(arm, '|Y', 0.8)
-    arm = soft(arm, '>Y or <Y', 1.6)
+    try:   # round the long edges only (the ends are buried in the root and the knee frame)
+        arm = arm.faces('>Y or <Y').edges('not |Z').fillet(1.6)
+    except Exception:
+        pass
     # knee servo frame: plate normal to Y at y=0..3, servo body passes through to -Y
     kx, kz = COXA_LEN, Z_KNEE
     frame = cq.Workplane('XY').box(20, KNEE_FRAME_T, 38).translate((kx, KNEE_FRAME_T / 2, kz - 9))
@@ -271,9 +258,10 @@ def shin():
     tail = cq.Workplane('XY').box(STOP_R1 - 6, ys1 - ys0, 7).translate((-(STOP_R1 + 6) / 2, yt, -1.5))
     tail = soft(tail, '|Y and >Z', 2.5)
     tail = soft(tail, '|X', 1.0)
-    # round motor boss through the beam
+    # round motor boss through the beam; its top (the motor seat) is level with the top of
+    # the knee disc, so the arm prints upside down with the motor seat flat on the bed
     mx = SHIN_TO_MOTOR
-    pad = cq.Workplane('XY').center(mx, ym).circle(11.5).extrude(10).translate((0, 0, -4))
+    pad = cq.Workplane('XY').center(mx, ym).circle(11.5).extrude(MOTOR_SEAT + 4).translate((0, 0, -4))
     pad = soft(pad, '>Z or <Z', 1.2)
     # toe with a gusset on the inner side (points down in drone mode, inward when walking)
     toe = cq.Workplane('XY').box(8, 8, TOE_LEN).translate((L - 4, ym - 0.4, -2 - TOE_LEN / 2))   # 8x8: the TPU boot fits
@@ -285,12 +273,16 @@ def shin():
     leg = leg.cut(cq.Workplane('XZ').pushPoints([(9, 0), (-9, 0), (0, 9)]).circle(0.9).extrude(-6).translate((0, y0 - 1, 0)))
     leg = leg.cut(cq.Workplane('XY').center(-STOP_MAG, yt).circle(MAGNET[0] / 2).extrude(MAGNET[1]).translate((0, 0, -5)))
     leg = leg.cut(cq.Workplane('XY').center(-STOP_SCREW, yt).rect(5, 5).extrude(1.0).translate((0, 0, -5)))   # flat for the levelling screw tip
-    # motor holes (both patterns) + shaft relief; screw heads sit flat under the boss
-    pts = []
-    for (a, b) in MOTOR_HOLES:
-        pts += [(mx + sx * a / 2, ym + sy * b / 2) for sx in (-1, 1) for sy in (-1, 1)]
-    leg = leg.cut(cq.Workplane('XY').pushPoints(pts).circle(M2_CLR / 2).extrude(30, both=True))
-    leg = leg.cut(cq.Workplane('XY').center(mx, ym).circle(3.5).extrude(30, both=True))
+    # motor mount: four diagonal M2 slots (any 1103-1404 pattern) + shaft/circlip relief;
+    # screw heads sit flat under the boss
+    r0, r1 = MOTOR_SLOT
+    rm, ln = (r0 + r1) / 2, r1 - r0 + M2_CLR
+    for k in range(4):
+        a = 45 + 90 * k
+        cx, cy = mx + rm * math.cos(math.radians(a)), ym + rm * math.sin(math.radians(a))
+        leg = leg.cut(cq.Workplane('XY').center(cx, cy).slot2D(ln, M2_CLR, a).extrude(30, both=True))
+        leg = leg.cut(cq.Workplane('XY').center(cx, cy).slot2D(ln + 2.2, 4.4, a).extrude(MOTOR_SEAT + 10 - 3).translate((0, 0, -10)))  # head counterbore: 3 mm left under the motor
+    leg = leg.cut(cq.Workplane('XY').center(mx, ym).circle(2.6).extrude(30, both=True))
     # lightening windows (also the motor-wire path)
     for (x, ln) in ((22, 16), (66, 12)):
         leg = leg.cut(cq.Workplane('XZ').center(x, 0.3).slot2D(ln, 4.2).extrude(-20).translate((0, y0 - 1, 0)))
@@ -320,7 +312,34 @@ PARTS = {
     'leg_spacer': (leg_spacer, 4),
 }
 
+PRINT_FLIP = {'shin_arm'}   # parts exported upside down for printing (motor seat on the bed)
+
 ASM = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 'viewer', 'assembly')
+
+def export_stl(wp, path, tol):
+    """Write an STL and make sure the mesh is closed (slicers hate holes); OCC's mesher
+    occasionally leaves a seam open, so retry with slightly different settings."""
+    from OCP.BRepTools import BRepTools
+    for k in range(8):
+        BRepTools.Clean_s(wp.val().wrapped)          # drop any cached mesh so the new settings apply
+        cq.exporters.export(wp, path, tolerance=tol * (1 + 0.25 * (k // 4)), angularTolerance=(0.15, 0.1, 0.2, 0.25)[k % 4])
+        try:
+            import trimesh
+            if trimesh.load(path).is_watertight:
+                return
+        except ImportError:
+            return
+    try:   # last resort: close the seam with MeshFix (pip install pymeshfix)
+        import pymeshfix
+        m = trimesh.load(path)
+        mf = pymeshfix.MeshFix(m.vertices, m.faces); mf.repair()
+        trimesh.Trimesh(mf.points, mf.faces).export(path)
+        if trimesh.load(path).is_watertight:
+            return
+    except ImportError:
+        pass
+    print('  warning: mesh not watertight:', path)
+
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True); os.makedirs(ASM, exist_ok=True)
@@ -328,10 +347,12 @@ if __name__ == '__main__':
         part = fn()
         # assembly coordinates for the 3D viewer
         part = cq.Workplane().add(part.val().clean().fix())
-        cq.exporters.export(part, os.path.join(ASM, f'{name}.stl'), tolerance=0.06, angularTolerance=0.15)
-        # print-ready: centred on the bed, lowest point at z = 0
         bb = part.val().BoundingBox()
-        bed = part.translate((-(bb.xmin + bb.xmax) / 2, -(bb.ymin + bb.ymax) / 2, -bb.zmin))
-        cq.exporters.export(bed, os.path.join(OUT, f'{name}.stl'), tolerance=0.05, angularTolerance=0.1)
+        # print-ready copy: flipped if it prints better upside down, centred, lowest point on the bed
+        bed = part.rotate((0, 0, 0), (1, 0, 0), 180) if name in PRINT_FLIP else part
+        pb = bed.val().BoundingBox()
+        bed = bed.translate((-(pb.xmin + pb.xmax) / 2, -(pb.ymin + pb.ymax) / 2, -pb.zmin))
+        export_stl(part, os.path.join(ASM, f'{name}.stl'), 0.06)        # assembly coordinates (3D viewer)
+        export_stl(bed, os.path.join(OUT, f'{name}.stl'), 0.04)         # print-ready: centred, on the bed
         cq.exporters.export(bed, os.path.join(OUT, f'{name}.step'))
         print(f'{name:16s} x{n}  {bb.xlen:6.1f} x {bb.ylen:6.1f} x {bb.zlen:6.1f} mm  vol {part.val().Volume() / 1000:6.1f} cm3')

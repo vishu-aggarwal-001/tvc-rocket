@@ -1,0 +1,114 @@
+[
+ {
+  "file": "chassis_bottom",
+  "title": "Bottom plate",
+  "qty": "1",
+  "mat": "PETG / ASA",
+  "col": "#3a3e46",
+  "settings": "3 walls · 30 % gyroid · no supports",
+  "note": "Holds the four hip servos, the deck pillars and the battery straps.",
+  "dims": [
+   92.0,
+   92.0,
+   20.5
+  ],
+  "vol": 21.2,
+  "grams": 15
+ },
+ {
+  "file": "chassis_deck",
+  "title": "Deck",
+  "qty": "1",
+  "mat": "PETG / ASA",
+  "col": "#3a3e46",
+  "settings": "3 walls · 30 % · no supports",
+  "note": "Top plate: bushings for the hip pins, 20×20 flight-controller standoffs, ESP32 bay.",
+  "dims": [
+   92.0,
+   92.0,
+   6.6
+  ],
+  "vol": 20.2,
+  "grams": 14
+ },
+ {
+  "file": "canopy",
+  "title": "Canopy",
+  "qty": "1",
+  "mat": "PETG / PLA (any colour)",
+  "col": "#e9e8e3",
+  "settings": "2 walls · 10 % · tree supports under the roof",
+  "note": "Shell over the electronics with hex and side vents and a USB-C slot at the front.",
+  "dims": [
+   78.0,
+   78.0,
+   17.0
+  ],
+  "vol": 13.7,
+  "grams": 10
+ },
+ {
+  "file": "coxa",
+  "title": "Upper leg (coxa)",
+  "qty": "4",
+  "mat": "PETG / ASA",
+  "col": "#3a3e46",
+  "settings": "4 walls · 40 % · supports for the knee frame and stop ledge",
+  "note": "Bolts to the hip servo horn; its pin turns in the deck. Holds the knee servo and the end stop (magnet + M3 levelling screw).",
+  "dims": [
+   54.0,
+   37.2,
+   38.0
+  ],
+  "vol": 6.9,
+  "grams": 5
+ },
+ {
+  "file": "shin_arm",
+  "title": "Lower leg / drone arm",
+  "qty": "4",
+  "mat": "PETG / ASA",
+  "col": "#3a3e46",
+  "settings": "4 walls · 40 % · prints upside down (motor seat on the bed) · tree supports under the arm and tail",
+  "note": "Leg when walking, arm when flying. Slotted motor mount fits any 1103-1404 motor (9 mm circle, 9×9, 12×12); the toe is the landing gear.",
+  "dims": [
+   105.5,
+   23.0,
+   54.0
+  ],
+  "vol": 11.4,
+  "grams": 8
+ },
+ {
+  "file": "foot_tpu",
+  "title": "Foot boot",
+  "qty": "4",
+  "mat": "TPU 95A",
+  "col": "#ff6b1a",
+  "settings": "2 walls · 20 %",
+  "note": "Slips over each toe: grip for walking, cushion for landing.",
+  "dims": [
+   11.2,
+   11.2,
+   15.6
+  ],
+  "vol": 0.9,
+  "grams": 1
+ },
+ {
+  "file": "leg_spacer",
+  "title": "Horn spacer (optional)",
+  "qty": "0–4",
+  "mat": "Any",
+  "col": "#8a8f99",
+  "settings": "100 %",
+  "note": "Only if a servo horn sits below flush in its pocket.",
+  "dims": [
+   20.0,
+   1.0,
+   20.0
+  ],
+  "vol": 0.3,
+  "grams": 0
+ }
+]

@@ -7,7 +7,6 @@
 static const uint8_t PIN_VBAT = 1;                     // battery divider 100k/22k (ADC1)
 static const uint8_t PIN_HIP[4]  = {2, 3, 4, 5};
 static const uint8_t PIN_KNEE[4] = {6, 7, 8, 9};
-static const uint8_t PIN_SDA = 10, PIN_SCL = 11;       // SSD1306 128x64 OLED face
 static const uint8_t PIN_BUZZER = 12;                  // active buzzer (optional)
 static const uint8_t PIN_CRSF_TX = 43, PIN_CRSF_RX = 44;  // to the flight controller UART (RX / TX pads)
 static const float VBAT_SCALE = (100.0f + 22.0f) / 22.0f;  // divider ratio
