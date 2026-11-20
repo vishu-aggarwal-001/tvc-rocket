@@ -4,6 +4,8 @@ A 3D-printed quadruped robot that walks on four legs and then folds its legs out
 
 ![Walking, transforming, flying](docs/images/hero.jpg)
 
+<p align="center"><img src="docs/images/fly_top.jpg" width="640" alt="Drone mode from above"></p>
+
 **What's in this repo**
 
 | Folder | What it is |
@@ -12,8 +14,8 @@ A 3D-printed quadruped robot that walks on four legs and then folds its legs out
 | [`cad/skycrawler.py`](cad/skycrawler.py) | The parametric CadQuery source. Change a number and every part regenerates |
 | [`firmware/`](firmware) | ESP32-S3 code (PlatformIO) for walking, the OLED face, WiFi and flight control |
 | [`app/`](app) | Android app (Kotlin) with twin joysticks, walk tricks, hold-to-arm and calibration |
-| [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly |
-| [`release/`](release) | Ready-made **`SkyCrawler-1.0.0.apk`** and the firmware **`skycrawler-esp32s3-full.bin`**. Tagging `v*` also makes CI publish them, plus a zip of the STLs, as a GitHub Release |
+| [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly, with a blinking face and spinning props |
+| [Releases](../../releases) | Ready-made `SkyCrawler-x.y.z.apk`, the firmware `.bin` and a zip of the STLs |
 
 > ⚠️ **Status: designed, not yet built.** The CAD has been checked in software for collisions across the full joint range. The firmware compiles and the APK builds. Nothing has been printed or flown yet. Fits are based on nominal MG90S dimensions, so expect to adjust tolerances once (see [Tuning the fit](#tuning-the-fit)). Please open an issue with what you find.
 
@@ -42,7 +44,8 @@ To switch to flying, the robot sits down, lowers each arm onto its stop and **sw
 | The battery hangs below the feet, so landings smash it | The **42 mm toe** clears the belly battery in drone mode. A **TPU boot** grips when walking and cushions landings |
 | Flight is either bolted-on or homemade | A real **Betaflight** flight controller does the stabilizing. The ESP32 talks to it as a CRSF receiver, so you get angle mode, auto-level, failsafe auto-land and a voltage readout |
 | Only one motor size fits | Both **9×9 and 12×12 mm** M2 motor patterns are drilled, so 1104 to 1404 class motors fit |
-| No personality | **OLED face** with 8 moods, blinking, battery-sad face and status text, plus cat ears |
+| No personality, wiring on show | One-piece **canopy** with hex vents covers the electronics. A **head pod** with cat ears carries the **OLED face**: 8 moods, blinking, a sad face for low battery, and status text |
+| Blocky, printed-looking parts | Tapered, filleted legs, a sleeve that wraps each knee servo, and a gusseted toe. The legs are 10 mm shorter, for a more compact stance |
 
 ---
 
@@ -80,7 +83,7 @@ All files in `stl/` are already oriented flat.
 |---|---|---|---|
 | `chassis_bottom` | 1 | PETG/ASA | 3 walls, 30 % gyroid, no supports |
 | `chassis_deck` | 1 | PETG/ASA | 3 walls, 30 %, no supports |
-| `head_shell` | 1 | PETG/PLA | 2 walls, 10 % (it's only a cover) |
+| `canopy` (body shell + head) | 1 | PETG/PLA, white or any colour | 2 walls, 10 %. Print upright on its base with tree supports inside the roof and head |
 | `coxa` (upper leg) | 4 | PETG/ASA | **4 walls, 40 %**, supports for the knee-servo frame and the stop ledge |
 | `shin_arm` (lower leg / drone arm) | 4 | PETG/ASA | **4 walls, 40 %**, supports under the motor pad and toe |
 | `foot_tpu` | 4 | TPU 95A | 2 walls, 20 % |
@@ -130,7 +133,7 @@ See **[docs/betaflight.md](docs/betaflight.md)**. It covers the exact CLI comman
 
 ## Flashing the firmware
 
-**Easiest:** download [`release/skycrawler-esp32s3-full.bin`](release/skycrawler-esp32s3-full.bin). Then either:
+**Easiest:** download `skycrawler-esp32s3-full.bin` from Releases. Then either:
 
 - open <https://espressif.github.io/esptool-js/> in Chrome, connect, and flash it at offset **0x0**, or
 - run:
@@ -148,7 +151,7 @@ Change `AP_PASS` in `config.h` before you build.
 
 ## The app
 
-Install [`release/SkyCrawler-1.0.0.apk`](release/SkyCrawler-1.0.0.apk) on the phone. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
+Install `SkyCrawler-x.y.z.apk` from Releases. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
 
 ```
 cd app
@@ -224,4 +227,4 @@ app/app/src/main/java/com/skycrawler/app/
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). The bundled three.js in `docs/viewer/three/` is MIT, © three.js authors.
+MIT. See [LICENSE](LICENSE). The bundled three.js (r180) in `docs/viewer/three/` is MIT, © three.js authors.

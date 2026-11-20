@@ -34,7 +34,7 @@ COXA_T = 5.0              # coxa root thickness (between the horn and the deck)
 GAP = 0.5
 COXA_LEN = 34.0           # hip axis to knee axis
 SHIN_TO_MOTOR = 48.0      # knee axis to motor centre
-SHIN_LEN = 92.0           # knee axis to the toe
+SHIN_LEN = 82.0           # knee axis to the toe
 TOE_LEN = 42.0            # the toe: a foot when walking, landing gear (clears the battery) when flying
 MOTOR_HOLES = [(9.0, 9.0), (12.0, 12.0)]   # 1104-1404 class motor patterns (M2), both drilled
 M2_TAP, M2_CLR, M3_TAP, M3_CLR = 1.7, 2.3, 2.6, 3.3
@@ -55,6 +55,20 @@ Z_DECK = Z_COXA_TOP + GAP
 Z_KNEE = Z_HORN + COXA_T / 2
 HIP = HIP_R / math.sqrt(2)
 HIPS = [(HIP, HIP), (-HIP, HIP), (-HIP, -HIP), (HIP, -HIP)]
+SHELL_SCREWS = [(-24, -22), (24, -22), (-24, 22), (24, 22)]   # canopy -> deck (M2)
+
+
+def soft(wp, selector, r):
+    """Fillet if OCC can do it, otherwise leave the edges sharp (never break the build)."""
+    try:
+        out = wp.edges(selector).fillet(r)
+        return out if out.val().isValid() else wp
+    except Exception:
+        return wp
+
+
+def rrect(w, h, r):
+    return cq.Sketch().rect(w, h).vertices().fillet(r)
 
 
 def servo_cut(wp_plane_obj, through):
@@ -71,39 +85,41 @@ def chassis_bottom():
     """Bottom plate: four hip servos hang through it, battery straps underneath,
     four pillars carry the deck."""
     half = 46.0
-    p = (cq.Workplane('XY').rect(2 * half, 2 * half).extrude(PLATE_T)
-         .edges('|Z').fillet(14))
-    # stiffening rim
-    rim = (cq.Workplane('XY').rect(2 * half, 2 * half).extrude(PLATE_T + 3).edges('|Z').fillet(14)
-           .cut(cq.Workplane('XY').rect(2 * half - 6, 2 * half - 6).extrude(PLATE_T + 3).edges('|Z').fillet(11)))
+    p = cq.Workplane('XY').placeSketch(rrect(2 * half, 2 * half, 16)).extrude(PLATE_T)
+    p = soft(p, '<Z', 1.2)
+    rim = (cq.Workplane('XY').placeSketch(rrect(2 * half, 2 * half, 16)).extrude(PLATE_T + 3)
+           .cut(cq.Workplane('XY').placeSketch(rrect(2 * half - 6, 2 * half - 6, 13)).extrude(PLATE_T + 3)))
+    rim = soft(rim, '>Z', 1.2)
     p = p.union(rim)
     for (x, y) in HIPS:
         ang = math.degrees(math.atan2(y, x))
-        # body centre sits inward of the shaft along the diagonal
-        r_body = HIP_R - SERVO['shaft_off']
+        r_body = HIP_R - SERVO['shaft_off']      # body centre sits inward of the shaft
         cx, cy = r_body * math.cos(math.radians(ang)), r_body * math.sin(math.radians(ang))
         cut = servo_cut(cq.Plane(origin=(cx, cy, 0), xDir=(math.cos(math.radians(ang)), math.sin(math.radians(ang)), 0)), 20)
         p = p.cut(cut)
-        # rim relief so the coxa can swing ±45°
+        # rim relief so the coxa can swing +-50 deg
         p = p.cut(cq.Workplane('XY').center(x, y).circle(17).extrude(PLATE_T + 4).translate((0, 0, PLATE_T)))
-    # pillars (M3 heat-set inserts on top) between the hips
+    # pillars (M3 heat-set inserts on top) between the hips, flared at the foot
     for (x, y) in [(0, 40), (0, -40), (40, 0), (-40, 0)]:
         pil = cq.Workplane('XY').center(x, y).circle(4.2).extrude(Z_DECK)
+        pil = pil.union(cq.Workplane('XY').center(x, y).circle(5.8).workplane(offset=PLATE_T + 3).circle(4.2).loft()
+                        .translate((0, 0, 0)))
         p = p.union(pil).cut(cq.Workplane('XY').center(x, y).circle(2.0).extrude(Z_DECK + 1).translate((0, 0, Z_DECK - 6)))
     # battery strap slots + weight-saving windows
     for x in (-24, 24):
-        p = p.cut(cq.Workplane('XY').center(x, 0).rect(3.2, 22).extrude(10, both=True))
-    p = p.cut(cq.Workplane('XY').rect(30, 46).extrude(10, both=True).edges('|Z').fillet(5))
+        p = p.cut(cq.Workplane('XY').center(x, 0).slot2D(22, 3.2, 90).extrude(10, both=True))
+    p = p.cut(cq.Workplane('XY').placeSketch(rrect(30, 46, 6)).extrude(10, both=True))
     # power switch / XT30 pass-through at the back
-    p = p.cut(cq.Workplane('XY').center(0, -40).rect(14, 6).extrude(10, both=True).edges('|Z').fillet(2))
+    p = p.cut(cq.Workplane('XY').center(0, -40).slot2D(14, 6).extrude(10, both=True))
     return p
 
 
 def chassis_deck():
     """Top deck: takes the coxa pins (dual-support hips), carries the FC stack,
-    the ESP32-S3 and the head shell."""
+    the ESP32-S3 and the canopy."""
     half = 46.0
-    d = (cq.Workplane('XY').rect(2 * half, 2 * half).extrude(DECK_T).edges('|Z').fillet(14))
+    d = cq.Workplane('XY').placeSketch(rrect(2 * half, 2 * half, 16)).extrude(DECK_T)
+    d = soft(d, '>Z', 1.0)
     for (x, y) in HIPS:
         d = d.cut(cq.Workplane('XY').center(x, y).circle(3.25).extrude(10, both=True))   # Ø6 pin bushing
     for (x, y) in [(0, 40), (0, -40), (40, 0), (-40, 0)]:
@@ -119,36 +135,64 @@ def chassis_deck():
     d = d.cut(cq.Workplane('XY').center(0, -6).rect(12, 12).extrude(10, both=True))
     for (x, y) in [(-26, 0), (26, 0)]:
         d = d.cut(cq.Workplane('XY').center(x, y).rect(8, 20).extrude(10, both=True).edges('|Z').fillet(3))
-    # head shell screw holes
-    for (x, y) in [(-27, -24), (27, -24), (-27, 30), (27, 30)]:
+    # canopy screw holes
+    for (x, y) in SHELL_SCREWS:
         d = d.cut(cq.Workplane('XY').center(x, y).circle(M2_TAP / 2).extrude(10, both=True))
     return d.translate((0, 0, Z_DECK))
 
 
-def head_shell():
-    """The head: covers the electronics, OLED face window at the front, cat ears."""
-    W, D, H, t = 62.0, 62.0, 30.0, 2.0
-    outer = cq.Workplane('XY').center(0, 3).rect(W, D).extrude(H).edges('|Z').fillet(9).faces('>Z').edges().fillet(4)
-    inner = cq.Workplane('XY').center(0, 3).rect(W - 2 * t, D - 2 * t).extrude(H - t).edges('|Z').fillet(7)
-    s = outer.cut(inner)
-    # 0.96" SSD1306 window (active area ~22x11) + PCB pocket behind it
-    s = s.cut(cq.Workplane('XZ', origin=(0, 3 + D / 2, 0)).center(0, 17).rect(24, 13).extrude(-5))
-    s = s.cut(cq.Workplane('XZ', origin=(0, 3 + D / 2 - t, 0)).center(0, 16).rect(28.0, 28.0).extrude(1.2))
-    # screw bosses down to the deck
-    for (x, y) in [(-27, -24), (27, -24), (-27, 30), (27, 30)]:
-        s = s.union(cq.Workplane('XY').center(x, y).circle(3.2).extrude(H - t))
-        s = s.cut(cq.Workplane('XY').center(x, y).circle(M2_CLR / 2).extrude(H + 1))
-        s = s.cut(cq.Workplane('XY').center(x, y).circle(2.2).extrude(3))
-    # ears
+def canopy():
+    """One-piece shell over the deck: a low sloped body with hex vents, and the HEAD
+    pod at the front with the OLED face and ears. Screws to the deck with 4x M2."""
+    t = 1.8
+    BW, TW, TD, H = 78.0, 60.0, 56.0, 15.0          # base width, top width/depth, body height
+    HX, HY0, HY1, HH = 44.0, 9.0, 36.0, 36.0        # head: width, back/front y, height
+
+    def body(off):
+        lo = (cq.Workplane('XY').placeSketch(rrect(BW - 2 * off, BW - 2 * off, 26 - off),
+                                             rrect(TW - 2 * off, TD - 2 * off, 17 - off).moved(cq.Location(cq.Vector(0, -3, H - off))))
+              .loft())
+        return soft(lo, '>Z', 6 - off * 0.8)
+
+    def head(off):
+        hd = (cq.Workplane('XY').center(0, (HY0 + HY1) / 2)
+              .placeSketch(rrect(HX - 2 * off, HY1 - HY0 - 2 * off, 10 - off)).extrude(HH - off))
+        return soft(hd, '>Z', 7 - off)
+
+    outer = body(0).union(head(0))
+    inner = body(t).union(head(t)).translate((0, 0, -0.01))
+    shell = outer.cut(inner)
+    # screw bosses: clipped to the inside of the shell
+    bosses = cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(3.2).extrude(HH)
+    shell = shell.union(bosses.intersect(inner))
+    shell = shell.cut(cq.Workplane('XY').pushPoints(SHELL_SCREWS).circle(M2_CLR / 2).extrude(HH + 1))
+    # clear the coxa pins that poke through the deck
+    shell = shell.cut(cq.Workplane('XY').pushPoints(HIPS).circle(5).extrude(6, both=True))
+    # OLED: face window (active area ~22x11) and the 27x28 PCB pocket behind it
+    fz = 21.0
+    shell = shell.cut(cq.Workplane('XZ', origin=(0, HY1 + 1, 0)).center(0, fz).placeSketch(rrect(26, 15, 3)).extrude(4))
+    shell = shell.cut(cq.Workplane('XZ', origin=(0, HY1 - t + 0.01, 0)).center(0, fz - 1).rect(28.0, 28.5).extrude(1.2))
+    # ears (rounded triangles, tilted out)
     for sx in (-1, 1):
-        ear = (cq.Workplane('XZ', origin=(0, 3 + D / 2 - 14, 0)).polyline([(sx * 12, H - 1), (sx * 26, H - 1), (sx * 24, H + 9)]).close().extrude(8))
-        s = s.union(ear)
-    # vents on the back, USB-C access on the left
-    for i in range(5):
-        s = s.cut(cq.Workplane('XZ', origin=(0, 3 - D / 2 + 3, 0)).center(-16 + i * 8, 14).rect(3, 14).extrude(5))
-    s = s.cut(cq.Workplane('YZ', origin=(-W / 2 - 1, 0, 0)).center(22, 5).rect(10, 5).extrude(5))
-    # leave the hip bushings uncovered: nothing to cut (shell sits inside them)
-    return s.translate((0, 0, Z_DECK + DECK_T))
+        ear = (cq.Workplane('XZ', origin=(0, (HY0 + HY1) / 2 + 3, 0))
+               .polyline([(sx * 7, HH - 3), (sx * 19, HH - 3), (sx * 17, HH + 9)]).close().extrude(6))
+        ear = soft(ear, '|Y', 1.6)
+        shell = shell.union(ear)
+    # hex vents over the FC
+    pts = []
+    for row in range(4):
+        for col in range(-3, 4):
+            x = col * 6.4 + (3.2 if row % 2 else 0)
+            y = -26 + row * 5.6
+            if abs(x) < 22:
+                pts.append((x, y))
+    shell = shell.cut(cq.Workplane('XY').pushPoints(pts).polygon(6, 4.6).extrude(10).translate((0, 0, H - 4)))
+    # side vents on the head + USB-C access on the left
+    for sx in (-1, 1):
+        for i in range(3):
+            shell = shell.cut(cq.Workplane('YZ', origin=(sx * HX / 2 - 3, 0, 0)).center(18 + i * 5, 22).slot2D(10, 2.2, 90).extrude(6))
+    shell = shell.cut(cq.Workplane('YZ', origin=(-HX / 2 - 2, 0, 0)).center(22, 4.5).placeSketch(rrect(11, 5, 2)).extrude(6))
+    return shell.translate((0, 0, Z_DECK + DECK_T))
 
 
 # ------------------------------------------------------------------ legs
@@ -167,13 +211,25 @@ def coxa():
     root = root.cut(horn)
     root = root.cut(cq.Workplane('XY').pushPoints([(9, 0), (-9, 0)]).circle(0.9).extrude(COXA_T).translate((0, 0, z0)))
     pin = cq.Workplane('XY').circle(2.95).extrude(DECK_T + GAP + 0.5).translate((0, 0, z0 + COXA_T))
-    # arm: deepens away from the hip
-    arm = (cq.Workplane('XZ').polyline([(6, z0), (COXA_LEN - 8, z0 - 6), (COXA_LEN - 8, z0 + COXA_T), (6, z0 + COXA_T)]).close()
-           .extrude(5, both=True))
+    # arm: a tapered beam that deepens towards the knee, rounded along its length
+    arm = (cq.Workplane('XZ').moveTo(6, z0).spline([(18, z0 - 2.5), (COXA_LEN - 7, z0 - 7)], includeCurrent=True)
+           .lineTo(COXA_LEN - 7, z0 + COXA_T).lineTo(6, z0 + COXA_T).close().extrude(5, both=True))
+    arm = soft(arm, '|Y', 0.8)
+    arm = soft(arm, '>Y or <Y', 1.6)
     # knee servo frame: plate normal to Y at y=0..3, servo body passes through to -Y
     kx, kz = COXA_LEN, Z_KNEE
     frame = cq.Workplane('XY').box(20, KNEE_FRAME_T, 38).translate((kx, KNEE_FRAME_T / 2, kz - 9))
+    frame = soft(frame, '|Y', 4)
     body_c = (kx, 0, kz - s['shaft_off'])
+    # sleeve that wraps the knee servo body (stiffer, and it hides the screws). The servo
+    # slides in from the horn side; the far end is open, with a notch for the lead.
+    sl_len = 12.0
+    sleeve = (cq.Workplane('XZ').center(kx, kz - s['shaft_off'])
+              .placeSketch(rrect(s['W'] + 3.6, s['L'] + 3.6, 3)).extrude(sl_len))
+    sleeve = sleeve.cut(cq.Workplane('XZ').center(kx, kz - s['shaft_off']).rect(s['W'], s['L']).extrude(sl_len + 1))
+    sleeve = sleeve.cut(cq.Workplane('XY').box(6, 6, 6).translate((kx, -sl_len, kz - s['shaft_off'] - s['L'] / 2)))
+    sleeve = soft(sleeve, '<Y', 0.8)
+    frame = frame.union(sleeve)
     frame = frame.cut(cq.Workplane('XY').box(s['W'], 10, s['L']).translate(body_c))
     frame = frame.cut(cq.Workplane('XZ').pushPoints([(kx, kz - s['shaft_off'] + s['screw_pitch'] / 2), (kx, kz - s['shaft_off'] - s['screw_pitch'] / 2)])
                       .circle(s['screw_d'] / 2).extrude(10, both=True))
@@ -184,7 +240,8 @@ def coxa():
     ym = (ys0 + ys1) / 2
     ledge = cq.Workplane('XY').box(STOP_R1 - STOP_R0, ys1 - ys0, 6).translate((kx - (STOP_R0 + STOP_R1) / 2, ym, kz - 8))
     web = cq.Workplane('XY').box(6.5, ys0 - KNEE_FRAME_T + 2, 6).translate((kx - STOP_R1 + 3.25, (ys0 + KNEE_FRAME_T) / 2, kz - 8))
-    stop = ledge.union(web)
+    riser = cq.Workplane('XY').box(6.5, ys0 - 0.6 - 2, 9).translate((kx - STOP_R1 + 3.25, (ys0 - 0.6 + 2) / 2, kz - 5.5))
+    stop = soft(ledge, '|X', 1.2).union(soft(web, '|Y', 1.2)).union(soft(riser, '|Y', 1.2))
     stop = stop.cut(cq.Workplane('XY').center(kx - STOP_MAG, ym).circle(MAGNET[0] / 2).extrude(MAGNET[1]).translate((0, 0, kz - 5 - MAGNET[1])))
     stop = stop.cut(cq.Workplane('XY').center(kx - STOP_SCREW, ym).circle(M3_TAP / 2).extrude(20).translate((0, 0, kz - 15)))
     c = root.union(pin).union(arm).union(frame).union(stop)
@@ -197,37 +254,46 @@ def shin():
     arm is level, so propeller thrust pushes it INTO the stop. Motor pad on top at
     SHIN_TO_MOTOR, toe at the tip pointing down (landing foot in drone mode)."""
     y0, y1 = LEG_Y0, LEG_Y1      # the leg's plane (outboard of the servo horn)
+    ym = (y0 + y1) / 2
     root = cq.Workplane('XZ').circle(10).extrude(-4).translate((0, y0, 0))
+    root = soft(root, '>Y', 1.0)
     horn = (cq.Workplane('XZ').rect(32, 6.2).extrude(-1.6).union(cq.Workplane('XZ').rect(6.2, 20).extrude(-1.6))
             .union(cq.Workplane('XZ').circle(3.8).extrude(-1.6))).translate((0, y0, 0))
-    root = root.cut(horn)
-    root = root.cut(cq.Workplane('XZ').pushPoints([(9, 0), (-9, 0), (0, 9)]).circle(0.9).extrude(-6).translate((0, y0 - 1, 0)))
-    # main beam (I-ish section) from the knee to the toe
-    beam = cq.Workplane('XZ').polyline([(4, -5), (SHIN_LEN, -4), (SHIN_LEN, 3), (4, 5)]).close().extrude(-(y1 - y0)).translate((0, y0, 0))
+    # main beam: tapers from the knee to the toe, upper edge gently curved
+    L = SHIN_LEN
+    beam = (cq.Workplane('XZ').moveTo(3, -5.5).lineTo(L, -3.5).lineTo(L, 3)
+            .spline([(L * 0.55, 4.6), (3, 6)], includeCurrent=True).close()
+            .extrude(-(y1 - y0)).translate((0, y0, 0)))
+    beam = soft(beam, '>Y', 1.8)
     # tail: sits on the stop ledge (magnet in its underside); reaches back into the root disc
     ys0, ys1 = STOP_Y
-    ym = (ys0 + ys1) / 2
-    tail = cq.Workplane('XY').box(STOP_R1 - 6, ys1 - ys0, 7).translate((-(STOP_R1 + 6) / 2, ym, -1.5))
-    tail = tail.cut(cq.Workplane('XY').center(-STOP_MAG, ym).circle(MAGNET[0] / 2).extrude(MAGNET[1]).translate((0, 0, -5)))
-    tail = tail.cut(cq.Workplane('XY').center(-STOP_SCREW, ym).rect(5, 5).extrude(1.0).translate((0, 0, -5)))   # flat for the levelling screw tip
-    # motor pad
+    yt = (ys0 + ys1) / 2
+    tail = cq.Workplane('XY').box(STOP_R1 - 6, ys1 - ys0, 7).translate((-(STOP_R1 + 6) / 2, yt, -1.5))
+    tail = soft(tail, '|Y and >Z', 2.5)
+    tail = soft(tail, '|X', 1.0)
+    # round motor boss through the beam
     mx = SHIN_TO_MOTOR
-    pad = cq.Workplane('XY').center(mx, (y0 + y1) / 2).circle(12).extrude(3).translate((0, 0, 3))
-    pad = pad.union(cq.Workplane('XY').center(mx, (y0 + y1) / 2).rect(22, 8).extrude(6).translate((0, 0, 0)))
-    leg = root.union(beam).union(tail).union(pad)
-    # motor holes (both patterns) + shaft relief, screw-head pockets from below
+    pad = cq.Workplane('XY').center(mx, ym).circle(11.5).extrude(10).translate((0, 0, -4))
+    pad = soft(pad, '>Z or <Z', 1.2)
+    # toe with a gusset on the inner side (points down in drone mode, inward when walking)
+    toe = cq.Workplane('XY').box(8, 8, TOE_LEN).translate((L - 4, ym - 0.4, -2 - TOE_LEN / 2))   # 8x8: the TPU boot fits
+    toe = soft(toe, '|Z', 1.6)
+    gus = (cq.Workplane('XZ').polyline([(L - 7, -3), (L - 7, -16), (L - 22, -3)]).close()
+           .extrude(-(y1 - y0 - 2)).translate((0, y0 + 1, 0)))
+    leg = root.union(beam).union(tail).union(pad).union(toe).union(gus)
+    leg = leg.cut(horn)
+    leg = leg.cut(cq.Workplane('XZ').pushPoints([(9, 0), (-9, 0), (0, 9)]).circle(0.9).extrude(-6).translate((0, y0 - 1, 0)))
+    leg = leg.cut(cq.Workplane('XY').center(-STOP_MAG, yt).circle(MAGNET[0] / 2).extrude(MAGNET[1]).translate((0, 0, -5)))
+    leg = leg.cut(cq.Workplane('XY').center(-STOP_SCREW, yt).rect(5, 5).extrude(1.0).translate((0, 0, -5)))   # flat for the levelling screw tip
+    # motor holes (both patterns) + shaft relief; screw heads sit flat under the boss
     pts = []
     for (a, b) in MOTOR_HOLES:
-        pts += [(mx + sx * a / 2, (y0 + y1) / 2 + sy * b / 2) for sx in (-1, 1) for sy in (-1, 1)]
+        pts += [(mx + sx * a / 2, ym + sy * b / 2) for sx in (-1, 1) for sy in (-1, 1)]
     leg = leg.cut(cq.Workplane('XY').pushPoints(pts).circle(M2_CLR / 2).extrude(30, both=True))
-    leg = leg.cut(cq.Workplane('XY').center(mx, (y0 + y1) / 2).circle(3.5).extrude(30, both=True))
-    leg = leg.cut(cq.Workplane('XY').pushPoints(pts).circle(2.1).extrude(5).translate((0, 0, -6)))
-    # lightening slots + wire channel
-    for x in (24, 70):
-        leg = leg.cut(cq.Workplane('XZ').center(x, 0).slot2D(14, 4).extrude(-20).translate((0, y0 - 1, 0)))
-    # toe (points down in drone mode, inward in walking mode)
-    toe = cq.Workplane('XY').box(8, y1 - y0, TOE_LEN).translate((SHIN_LEN - 4, (y0 + y1) / 2, -2 - TOE_LEN / 2))
-    leg = leg.union(toe)
+    leg = leg.cut(cq.Workplane('XY').center(mx, ym).circle(3.5).extrude(30, both=True))
+    # lightening windows (also the motor-wire path)
+    for (x, ln) in ((22, 16), (66, 12)):
+        leg = leg.cut(cq.Workplane('XZ').center(x, 0.3).slot2D(ln, 4.2).extrude(-20).translate((0, y0 - 1, 0)))
     return leg
 
 
@@ -247,7 +313,7 @@ def leg_spacer():
 PARTS = {
     'chassis_bottom': (chassis_bottom, 1),
     'chassis_deck': (chassis_deck, 1),
-    'head_shell': (head_shell, 1),
+    'canopy': (canopy, 1),
     'coxa': (coxa, 4),
     'shin_arm': (shin, 4),
     'foot_tpu': (foot_tpu, 4),
@@ -261,7 +327,8 @@ if __name__ == '__main__':
     for name, (fn, n) in PARTS.items():
         part = fn()
         # assembly coordinates for the 3D viewer
-        cq.exporters.export(part, os.path.join(ASM, f'{name}.stl'), tolerance=0.1, angularTolerance=0.2)
+        part = cq.Workplane().add(part.val().clean().fix())
+        cq.exporters.export(part, os.path.join(ASM, f'{name}.stl'), tolerance=0.06, angularTolerance=0.15)
         # print-ready: centred on the bed, lowest point at z = 0
         bb = part.val().BoundingBox()
         bed = part.translate((-(bb.xmin + bb.xmax) / 2, -(bb.ymin + bb.ymax) / 2, -bb.zmin))

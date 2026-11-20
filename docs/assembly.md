@@ -64,14 +64,14 @@ If the horn sits below flush, add a `leg_spacer`.
 1. Mount the FC on the 20×20 standoffs in the deck with M2 screws and soft grommets, **arrow towards the face**.
 2. Zip-tie the ESP32-S3 into the deck slots.
 3. Mount the UBEC under the deck.
-4. Glue the OLED behind the window in `head_shell`.
+4. Press the OLED into the pocket behind the face window in the `canopy` head, then add a drop of glue at the corners.
 5. Wire everything according to the table in the README.
 6. Put a 3-pin header strip on a small perfboard as a **servo power bus**:
    - all servo V+ to UBEC 5 V
    - all servo GND to UBEC GND, which is joined to the FC and ESP32 grounds
    - signals to the ESP32 pins
 7. Strap the battery under the belly through the slots in `chassis_bottom`.
-8. Clip the head shell on.
+8. Screw the canopy onto the deck with 4× M2×8 screws.
 
 ## 7. Calibrate (props off)
 

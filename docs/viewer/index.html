@@ -2,120 +2,202 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SkyCrawler — 3D viewer</title>
 <style>
-html,body{margin:0;height:100%;background:#15171c;color:#eee;font:14px system-ui,sans-serif;overflow:hidden}
-#ui{position:fixed;left:12px;top:12px;background:rgba(0,0,0,.55);padding:10px 12px;border-radius:10px;max-width:300px}
-#ui h1{font-size:18px;margin:0 0 6px} #ui p{margin:4px 0;color:#bbb;font-size:12px}
-button{background:#2b6cff;color:#fff;border:0;border-radius:6px;padding:7px 10px;margin:4px 4px 0 0;font:inherit;cursor:pointer}
-button.alt{background:#333}
-input[type=range]{width:100%}
+html,body{margin:0;height:100%;overflow:hidden;color:#e9ecf2;font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:radial-gradient(120% 90% at 50% 30%,#3b414d 0%,#22262e 55%,#14161b 100%)}
+canvas{display:block}
+#ui{position:fixed;left:16px;top:16px;width:260px;padding:14px 16px;border-radius:14px;
+  background:rgba(18,20,26,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.08)}
+#ui h1{font-size:17px;margin:0;letter-spacing:.3px}
+#ui p{margin:4px 0 10px;color:#9aa3b2;font-size:12px}
+.row{display:flex;gap:6px}
+button{flex:1;background:rgba(255,255,255,.08);color:#e9ecf2;border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:8px 0;font:inherit;cursor:pointer}
+button:hover{background:rgba(255,255,255,.14)} button.on{background:#ff6b1a;border-color:#ff6b1a;color:#111;font-weight:600}
+input[type=range]{width:100%;accent-color:#ff6b1a;margin-top:10px}
 </style>
 <script type="importmap">{"imports":{"three":"./three/three.module.js","three/addons/":"./three/addons/"}}</script>
 </head><body>
 <div id="ui"><h1>SkyCrawler</h1>
-<p>Walking robot ⇄ quadcopter. Drag to orbit, scroll to zoom.</p>
-<button id="walk">Walk</button><button id="fly">Fly</button><button id="tr" class="alt">Transform</button>
-<p>Pose <input id="pose" type="range" min="0" max="1" step="0.01" value="0"></p>
+<p>Walking robot ⇄ quadcopter · drag to orbit, scroll to zoom</p>
+<div class="row"><button id="walk">Walk</button><button id="fly">Fly</button><button id="tr">Transform</button></div>
+<input id="pose" type="range" min="0" max="1" step="0.01" value="0">
 </div>
 <script type="module">
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // must match cad/skycrawler.py
-const HIP_R = 48, Z_TAB = 3, Z_HORN = 15, COXA_T = 5, COXA_LEN = 34, LEG_Y0 = 15, LEG_Y1 = 23, SHIN_TO_MOTOR = 48, SHAFT_OFF = 5.6;
+const HIP_R = 48, Z_TAB = 3, Z_HORN = 15, COXA_T = 5, COXA_LEN = 34, KNEE_FRAME_T = 3, LEG_Y0 = 15, LEG_Y1 = 23,
+      SHIN_TO_MOTOR = 48, SHIN_LEN = 82, TOE_LEN = 42, SHAFT_OFF = 5.6, Z_SHELL = 23.1, HEAD_FRONT = 36;
 const D = Math.PI / 180;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+// ---------------------------------------------------------------- renderer / stage
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1b1e24);
-const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 1, 5000);
-cam.position.set(260, 200, 230); cam.up.set(0, 0, 1);
-const ctl = new OrbitControls(cam, renderer.domElement); ctl.target.set(0, 0, 0); ctl.update();
-scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x30302a, 1.4));
-const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(150, -120, 300); sun.castShadow = true;
-sun.shadow.camera.left = sun.shadow.camera.bottom = -250; sun.shadow.camera.right = sun.shadow.camera.top = 250; sun.shadow.mapSize.set(2048, 2048);
-scene.add(sun);
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.9 }));
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 5, 5000);
+cam.up.set(0, 0, 1); cam.position.set(300, -270, 190);
+const ctl = new OrbitControls(cam, renderer.domElement); ctl.target.set(0, 0, 40); ctl.enableDamping = true; ctl.update();
+
+const key = new THREE.DirectionalLight(0xfff1e0, 2.4); key.position.set(-160, -220, 380); key.castShadow = true;
+Object.assign(key.shadow.camera, { left: -220, right: 220, top: 220, bottom: -220, near: 50, far: 900 });
+key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 6; key.shadow.bias = -0.0004; scene.add(key);
+const rim = new THREE.DirectionalLight(0x9cc4ff, 1.6); rim.position.set(220, 260, 160); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xdde6ff, 0x262019, 0.5));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(900, 64), new THREE.ShadowMaterial({ opacity: 0.38 }));
 floor.receiveShadow = true; scene.add(floor);
 
+// ---------------------------------------------------------------- materials
+const phys = (o) => new THREE.MeshPhysicalMaterial(o);
 const M = {
-  frame: new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 0.55 }),
-  accent: new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5 }),
-  servo: new THREE.MeshStandardMaterial({ color: 0x1f4fd6, roughness: 0.35, transparent: true, opacity: 0.92 }),
-  motor: new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.35 }),
-  bell: new THREE.MeshStandardMaterial({ color: 0xc8102e, metalness: 0.5, roughness: 0.35 }),
-  prop: new THREE.MeshStandardMaterial({ color: 0xcfe3ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
-  tpu: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.95 }),
-  board: new THREE.MeshStandardMaterial({ color: 0x0f5132, roughness: 0.6 }),
-  bat: new THREE.MeshStandardMaterial({ color: 0x2f2f33, roughness: 0.7 }),
-  oled: new THREE.MeshBasicMaterial({ color: 0x7fd3ff }),
+  frame: phys({ color: 0x2a2d33, roughness: 0.62, clearcoat: 0.08 }),
+  shell: phys({ color: 0xecebe6, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.4 }),
+  accent: phys({ color: 0xff6b1a, roughness: 0.55 }),
+  servo: phys({ color: 0x1f45c4, roughness: 0.28, clearcoat: 0.7, clearcoatRoughness: 0.15 }),
+  horn: phys({ color: 0x3b3e45, roughness: 0.5 }),
+  metal: phys({ color: 0x1b1c1f, metalness: 0.85, roughness: 0.32 }),
+  bell: phys({ color: 0x34363b, metalness: 0.9, roughness: 0.25 }),
+  prop: phys({ color: 0x9fb4cc, roughness: 0.15, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+  blur: new THREE.MeshBasicMaterial({ color: 0xc8d6e8, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+  bat: phys({ color: 0x17181b, roughness: 0.5, clearcoat: 0.4 }),
+  strap: phys({ color: 0x3a3c42, roughness: 0.9 }),
 };
-const loader = new STLLoader();
-const load = (n) => new Promise((res) => loader.load(`assembly/${n}.stl`, (g) => { g.computeVertexNormals(); res(g); }));
-const mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = o.receiveShadow = true; return o; };
-const box = (w, d, h, m) => mesh(new THREE.BoxGeometry(w, d, h), m);
 
+// ---------------------------------------------------------------- the OLED face
+const faceCanvas = document.createElement('canvas'); faceCanvas.width = 256; faceCanvas.height = 140;
+const faceTex = new THREE.CanvasTexture(faceCanvas); faceTex.colorSpace = THREE.SRGBColorSpace;
+function drawFace(blink = 0) {
+  const c = faceCanvas.getContext('2d'); c.fillStyle = '#05070a'; c.fillRect(0, 0, 256, 140);
+  c.fillStyle = '#8fe3ff'; c.shadowColor = '#4fc8ff'; c.shadowBlur = 18;
+  const eh = 46 * (1 - blink) + 5 * blink;
+  for (const x of [78, 178]) { c.beginPath(); c.roundRect(x - 22, 62 - eh / 2, 44, eh, 16); c.fill(); }
+  c.shadowBlur = 0; c.strokeStyle = '#8fe3ff'; c.lineWidth = 7; c.lineCap = 'round';
+  c.beginPath(); c.arc(116, 104, 12, 0.15 * Math.PI, 0.85 * Math.PI); c.arc(140, 104, 12, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
+  c.fillStyle = 'rgba(255,120,150,.35)'; for (const x of [36, 220]) { c.beginPath(); c.ellipse(x, 100, 16, 8, 0, 0, 7); c.fill(); }
+  faceTex.needsUpdate = true;
+}
+drawFace();
+
+// ---------------------------------------------------------------- loaders and little models
+const loader = new STLLoader();
+const load = (n) => new Promise((res) => loader.load(`assembly/${n}.stl`, (g) => res(toCreasedNormals(g, 32 * D))));
+const mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = o.receiveShadow = true; return o; };
+const cyl = (r, h, m, seg = 32) => { const o = mesh(new THREE.CylinderGeometry(r, r, h, seg), m); o.rotation.x = Math.PI / 2; return o; };
+const rbox = (w, d, h, r, m) => mesh(new RoundedBoxGeometry(w, d, h, 3, r), m);
+
+function servo() {   // MG90S, shaft on +Z at the origin, tab underside at z = 0, body towards -X
+  const g = new THREE.Group();
+  const body = rbox(22.8, 12.2, 22.5, 1.2, M.servo); body.position.set(-SHAFT_OFF, 0, -4.75); g.add(body);
+  const tabs = rbox(32.4, 12.2, 2.5, 0.6, M.servo); tabs.position.set(-SHAFT_OFF, 0, 1.25); g.add(tabs);
+  const boss = cyl(6, 3, M.servo); boss.position.z = 7.9; g.add(boss);
+  const boss2 = cyl(3.4, 2, M.servo); boss2.position.set(-7, 0, 7.4); g.add(boss2);
+  const spline = cyl(2.3, 2, M.metal, 16); spline.position.z = 10.2; g.add(spline);
+  const h1 = rbox(30, 5.6, 1.5, 0.6, M.horn); h1.position.z = 11.2; g.add(h1);
+  const h2 = rbox(5.6, 19, 1.5, 0.6, M.horn); h2.position.z = 11.2; g.add(h2);
+  return g;
+}
+function makeProp(dir) {
+  const g = new THREE.Group();
+  const s = new THREE.Shape();
+  s.moveTo(3.5, -2.4); s.bezierCurveTo(12, -5.2, 24, -5.0, 30.8, -1.6); s.quadraticCurveTo(32.4, 0.6, 30.2, 2.0);
+  s.bezierCurveTo(22, 4.2, 11, 4.0, 3.5, 2.4); s.closePath();
+  const bg = new THREE.ExtrudeGeometry(s, { depth: 0.7, bevelEnabled: true, bevelSize: 0.3, bevelThickness: 0.2, bevelSegments: 2, curveSegments: 18 });
+  for (let i = 0; i < 3; i++) {
+    const b = new THREE.Mesh(bg, M.prop); b.rotation.x = dir * 0.32; b.castShadow = true;
+    const p = new THREE.Group(); p.rotation.z = i * 2 * Math.PI / 3; p.add(b); g.add(p);
+  }
+  const hub = cyl(4.2, 5, M.prop); g.add(hub);
+  const nut = mesh(new THREE.ConeGeometry(2.6, 4, 16), M.metal); nut.rotation.x = Math.PI / 2; nut.position.z = 4.2; g.add(nut);
+  const disc = new THREE.Mesh(new THREE.RingGeometry(5, 32, 64), M.blur.clone()); g.add(disc); g.userData.disc = disc;
+  return g;
+}
+function motor(dir) {   // 1204-class motor sitting on the pad, prop on top
+  const g = new THREE.Group();
+  const base = cyl(8.3, 2.4, M.metal); base.position.z = 1.2; g.add(base);
+  const bell = cyl(8.4, 8, M.bell); bell.position.z = 6.4; g.add(bell);
+  const ring = mesh(new THREE.TorusGeometry(7.4, 0.7, 10, 40), M.accent); ring.position.z = 10.3; g.add(ring);
+  const cap = cyl(6.8, 0.8, M.metal); cap.position.z = 10.6; g.add(cap);
+  const shaft = cyl(1, 4, M.metal, 12); shaft.position.z = 12.5; g.add(shaft);
+  const prop = makeProp(dir); prop.position.z = 12.8; g.add(prop);
+  g.userData.prop = prop; return g;
+}
+
+// ---------------------------------------------------------------- build the robot
 const robot = new THREE.Group(); scene.add(robot);
 const legs = [];
-const [gB, gD, gH, gC, gS, gF] = await Promise.all(['chassis_bottom', 'chassis_deck', 'head_shell', 'coxa', 'shin_arm', 'foot_tpu'].map(load));
-robot.add(mesh(gB, M.frame), mesh(gD, M.frame), mesh(gH, M.accent));
-// battery under the belly, FC + ESP32 on the deck, OLED face
-const bat = box(30, 56, 20, M.bat); bat.position.set(0, 0, -10); robot.add(bat);
-const fc = box(27, 27, 4, M.board); fc.position.set(0, -6, 27.5); robot.add(fc);
-const esp = box(18, 23, 3, M.board); esp.position.set(0, 22, 25); robot.add(esp);
-const face = box(22, 1, 11, M.oled); face.position.set(0, 34.6 + 0.4, 23 + 17); robot.add(face);
+const [gB, gD, gH, gC, gS, gF] = await Promise.all(['chassis_bottom', 'chassis_deck', 'canopy', 'coxa', 'shin_arm', 'foot_tpu'].map(load));
+robot.add(mesh(gB, M.frame), mesh(gD, M.frame), mesh(gH, M.shell));
+// battery + strap under the belly
+const bat = rbox(30, 56, 18, 3, M.bat); bat.position.set(0, 0, -9); robot.add(bat);
+const label = rbox(30.4, 20, 18.4, 3, M.accent); label.position.set(0, 12, -9); robot.add(label);
+const strap = rbox(36, 10, 1.2, 0.5, M.strap); strap.position.set(0, -14, -18.6); robot.add(strap);
+// face
+const face = new THREE.Mesh(new THREE.PlaneGeometry(26, 15), new THREE.MeshBasicMaterial({ map: faceTex, toneMapped: false }));
+face.position.set(0, HEAD_FRONT - 1.2, Z_SHELL + 21); face.up.set(0, 0, 1); face.lookAt(0, 500, Z_SHELL + 21); robot.add(face);
+
+const knB = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0));
 for (let i = 0; i < 4; i++) {
   const a = (45 + 90 * i) * D, hx = HIP_R * Math.cos(a), hy = HIP_R * Math.sin(a);
-  // hip servo (fixed in the body)
-  const hs = box(23, 12.4, 25, M.servo);
-  hs.position.set((HIP_R - SHAFT_OFF) * Math.cos(a), (HIP_R - SHAFT_OFF) * Math.sin(a), Z_TAB - 16 + 12.5); hs.rotation.z = a; robot.add(hs);
+  const hs = servo(); hs.position.set(hx, hy, Z_TAB); hs.rotation.z = a; robot.add(hs);
   const coxa = new THREE.Group(); coxa.position.set(hx, hy, Z_HORN); robot.add(coxa);
   coxa.add(mesh(gC, M.frame));
-  const ks = box(12.4, 26, 23, M.servo); ks.position.set(COXA_LEN, -4, COXA_T / 2 - SHAFT_OFF); coxa.add(ks);
+  const ks = servo(); ks.applyMatrix4(knB); ks.position.set(COXA_LEN, KNEE_FRAME_T, COXA_T / 2); coxa.add(ks);
   const knee = new THREE.Group(); knee.position.set(COXA_LEN, 0, COXA_T / 2); coxa.add(knee);
   knee.add(mesh(gS, M.frame));
   const ym = (LEG_Y0 + LEG_Y1) / 2;
-  const mot = new THREE.Group(); mot.position.set(SHIN_TO_MOTOR, ym, 6); knee.add(mot);
-  const stator = mesh(new THREE.CylinderGeometry(9, 9, 7, 24), M.motor); stator.rotation.x = Math.PI / 2; stator.position.z = 3.5; mot.add(stator);
-  const bell = mesh(new THREE.CylinderGeometry(9.2, 9.2, 6, 24), M.bell); bell.rotation.x = Math.PI / 2; bell.position.z = 10; mot.add(bell);
-  const prop = mesh(new THREE.CircleGeometry(32, 48), M.prop); prop.position.z = 16; mot.add(prop);
-  const foot = mesh(gF, M.tpu); foot.position.set(92 - 4, ym, -2 - 42 + 15.6 / 2 - 4); foot.rotation.x = Math.PI; knee.add(foot);
-  legs.push({ a, coxa, knee, prop, phase: i % 2 ? Math.PI : 0 });
+  const mot = motor(i % 2 ? 1 : -1); mot.position.set(SHIN_TO_MOTOR, ym, 6); knee.add(mot);
+  const foot = mesh(gF, M.accent); foot.position.set(SHIN_LEN - 4, ym - 0.4, -2 - TOE_LEN - 1.6 + 7.8); knee.add(foot);
+  legs.push({ a, coxa, knee, prop: mot.userData.prop, phase: [0, Math.PI, 0, Math.PI][i], spin: i % 2 ? 1 : -1 });
 }
 
-// pose: 0 = walking stance, 1 = drone
-let pose = 0, target = 0, walking = false, t = 0;
+// ---------------------------------------------------------------- pose: 0 = walking, 1 = drone
+let pose = 0, target = 0, walking = false, t = 0, spin = 0;
 const ui = (id) => document.getElementById(id);
-ui('walk').onclick = () => { target = 0; walking = true; };
-ui('fly').onclick = () => { target = 1; walking = false; };
-ui('tr').onclick = () => { target = target > 0.5 ? 0 : 1; walking = false; };
-ui('pose').oninput = (e) => { target = pose = +e.target.value; walking = false; };
+const mark = () => { ui('walk').classList.toggle('on', target === 0); ui('fly').classList.toggle('on', target === 1); };
+ui('walk').onclick = () => { target = 0; walking = true; mark(); };
+ui('fly').onclick = () => { target = 1; walking = false; mark(); };
+ui('tr').onclick = () => { target = target > 0.5 ? 0 : 1; walking = false; mark(); };
+ui('pose').oninput = (e) => { target = pose = +e.target.value; walking = false; mark(); };
+mark();
 window.setPose = (p, walk = false, time = 0) => { pose = target = p; walking = walk; t = time; apply(); renderer.render(scene, cam); };
 window.view = (x, y, z, tx = 0, ty = 0, tz = 0) => { cam.position.set(x, y, z); ctl.target.set(tx, ty, tz); ctl.update(); renderer.render(scene, cam); };
+window.spinProps = (on) => { spin = on ? 1 : 0; apply(); renderer.render(scene, cam); };
 
 function apply() {
-  // body height: standing on the feet in walking pose, resting on the toes in drone pose
-  const knee = (1 - pose) * 90;                // degrees, 90 = shin straight down
+  const kneeDeg = (1 - pose) * 90;               // 90 = shin straight down (walking), 0 = level drone arm
   for (const L of legs) {
-    let yaw = 0, k = knee;
-    if (walking && pose < 0.05) { const s = Math.sin(t * 4 + L.phase); yaw = 22 * s; k = 90 - Math.max(0, Math.cos(t * 4 + L.phase)) * 28; }
+    let yaw = 0, k = kneeDeg;
+    if (walking && pose < 0.05) {
+      const s = Math.sin(t * 4 + L.phase); yaw = 20 * s;
+      k = 90 - Math.max(0, Math.cos(t * 4 + L.phase)) * 26;
+    }
     L.coxa.rotation.z = L.a + yaw * D;
     L.knee.rotation.y = k * D;
-    L.prop.rotation.z = pose > 0.98 ? t * 60 : 0;
+    const on = pose > 0.98 ? spin || (target === 1 ? 1 : 0) : 0;
+    L.prop.rotation.z += on * L.spin * 0.9;
+    L.prop.userData.disc.material.opacity = on * 0.16;
   }
-  // height: walking feet reach 92 mm below the knee (+ boot); drone toes 15 mm below the arm
-  const z = (1 - pose) * (92 + 4 + 5 - 17.5) + pose * (2 + 42 + 1.6 - 17.5);
-  robot.position.z = z;
+  // standing on the TPU boots when walking, on the toe tips (landing gear) as a drone
+  const zWalk = SHIN_LEN + 1.6 - (Z_HORN + COXA_T / 2), zFly = 2 + TOE_LEN + 1.6 - (Z_HORN + COXA_T / 2);
+  robot.position.z = (1 - pose) * zWalk + pose * zFly + (walking ? Math.abs(Math.sin(t * 8)) * 1.2 : 0);
 }
-const clock = new THREE.Clock();
+const clock = new THREE.Clock(); let nextBlink = 2;
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta(); t += dt;
   pose += (target - pose) * Math.min(1, dt * 2.5); if (Math.abs(target - pose) < 0.002) pose = target;
   ui('pose').value = pose;
-  apply(); renderer.render(scene, cam);
+  if (t > nextBlink) { drawFace(Math.min(1, (t - nextBlink) / 0.07)); if (t > nextBlink + 0.15) { drawFace(); nextBlink = t + 2 + Math.random() * 3; } }
+  apply(); ctl.update(); renderer.render(scene, cam);
 });
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.freeze = () => renderer.setAnimationLoop(null);
 window.ready = true;
 </script></body></html>
