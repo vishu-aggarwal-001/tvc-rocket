@@ -13,7 +13,7 @@ A 3D-printed quadruped robot that walks on four legs and then folds its legs out
 | [`firmware/`](firmware) | ESP32-S3 code (PlatformIO) for walking, the OLED face, WiFi and flight control |
 | [`app/`](app) | Android app (Kotlin) with twin joysticks, walk tricks, hold-to-arm and calibration |
 | [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly |
-| [Releases](../../releases) | Ready-made `SkyCrawler-x.y.z.apk`, the firmware `.bin` and a zip of the STLs |
+| [`release/`](release) | Ready-made **`SkyCrawler-1.0.0.apk`** and the firmware **`skycrawler-esp32s3-full.bin`**. Tagging `v*` also makes CI publish them, plus a zip of the STLs, as a GitHub Release |
 
 > ⚠️ **Status: designed, not yet built.** The CAD has been checked in software for collisions across the full joint range. The firmware compiles and the APK builds. Nothing has been printed or flown yet. Fits are based on nominal MG90S dimensions, so expect to adjust tolerances once (see [Tuning the fit](#tuning-the-fit)). Please open an issue with what you find.
 
@@ -130,7 +130,7 @@ See **[docs/betaflight.md](docs/betaflight.md)**. It covers the exact CLI comman
 
 ## Flashing the firmware
 
-**Easiest:** download `skycrawler-esp32s3-full.bin` from Releases. Then either:
+**Easiest:** download [`release/skycrawler-esp32s3-full.bin`](release/skycrawler-esp32s3-full.bin). Then either:
 
 - open <https://espressif.github.io/esptool-js/> in Chrome, connect, and flash it at offset **0x0**, or
 - run:
@@ -148,7 +148,7 @@ Change `AP_PASS` in `config.h` before you build.
 
 ## The app
 
-Install `SkyCrawler-x.y.z.apk` from Releases. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
+Install [`release/SkyCrawler-1.0.0.apk`](release/SkyCrawler-1.0.0.apk) on the phone. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
 
 ```
 cd app
