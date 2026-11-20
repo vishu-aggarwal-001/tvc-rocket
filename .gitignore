@@ -1,5 +1,15 @@
+# firmware
+firmware/.pio/
+# android
+app/.gradle/
+app/build/
+app/app/build/
+app/local.properties
+app/.idea/
+*.iml
+# python / cad
 __pycache__/
 *.pyc
 .venv/
-build/
+# misc
 .DS_Store

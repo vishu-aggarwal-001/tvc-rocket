@@ -1,0 +1,68 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  stl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install cadquery
+      - run: python cad/skycrawler.py
+      - run: cd stl && zip -r ../SkyCrawler-stl.zip .
+      - uses: actions/upload-artifact@v4
+        with: { name: stl, path: SkyCrawler-stl.zip }
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install platformio
+      - run: cd firmware && pio run
+      - name: merge into one flashable image (offset 0x0)
+        run: |
+          cd firmware
+          B=.pio/build/skycrawler
+          python ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 merge_bin --flash_size 4MB \
+            -o ../skycrawler-esp32s3-full.bin \
+            0x0 $B/bootloader.bin 0x8000 $B/partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 $B/firmware.bin
+      - uses: actions/upload-artifact@v4
+        with: { name: firmware, path: skycrawler-esp32s3-full.bin }
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - run: cd app && chmod +x gradlew && ./gradlew --no-daemon assembleRelease
+      - run: cp app/app/build/outputs/apk/release/app-release.apk SkyCrawler.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: SkyCrawler.apk }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [stl, firmware, apk]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
+      - run: mv SkyCrawler.apk "SkyCrawler-${GITHUB_REF_NAME#v}.apk"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SkyCrawler-*.apk
+            skycrawler-esp32s3-full.bin
+            SkyCrawler-stl.zip

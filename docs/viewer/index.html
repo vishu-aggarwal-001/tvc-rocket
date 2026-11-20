@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkyCrawler — 3D viewer</title>
+<style>
+html,body{margin:0;height:100%;background:#15171c;color:#eee;font:14px system-ui,sans-serif;overflow:hidden}
+#ui{position:fixed;left:12px;top:12px;background:rgba(0,0,0,.55);padding:10px 12px;border-radius:10px;max-width:300px}
+#ui h1{font-size:18px;margin:0 0 6px} #ui p{margin:4px 0;color:#bbb;font-size:12px}
+button{background:#2b6cff;color:#fff;border:0;border-radius:6px;padding:7px 10px;margin:4px 4px 0 0;font:inherit;cursor:pointer}
+button.alt{background:#333}
+input[type=range]{width:100%}
+</style>
+<script type="importmap">{"imports":{"three":"./three/three.module.js","three/addons/":"./three/addons/"}}</script>
+</head><body>
+<div id="ui"><h1>SkyCrawler</h1>
+<p>Walking robot ⇄ quadcopter. Drag to orbit, scroll to zoom.</p>
+<button id="walk">Walk</button><button id="fly">Fly</button><button id="tr" class="alt">Transform</button>
+<p>Pose <input id="pose" type="range" min="0" max="1" step="0.01" value="0"></p>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// must match cad/skycrawler.py
+const HIP_R = 48, Z_TAB = 3, Z_HORN = 15, COXA_T = 5, COXA_LEN = 34, LEG_Y0 = 15, LEG_Y1 = 23, SHIN_TO_MOTOR = 48, SHAFT_OFF = 5.6;
+const D = Math.PI / 180;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1b1e24);
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 1, 5000);
+cam.position.set(260, 200, 230); cam.up.set(0, 0, 1);
+const ctl = new OrbitControls(cam, renderer.domElement); ctl.target.set(0, 0, 0); ctl.update();
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x30302a, 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(150, -120, 300); sun.castShadow = true;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -250; sun.shadow.camera.right = sun.shadow.camera.top = 250; sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.9 }));
+floor.receiveShadow = true; scene.add(floor);
+
+const M = {
+  frame: new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 0.55 }),
+  accent: new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5 }),
+  servo: new THREE.MeshStandardMaterial({ color: 0x1f4fd6, roughness: 0.35, transparent: true, opacity: 0.92 }),
+  motor: new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.35 }),
+  bell: new THREE.MeshStandardMaterial({ color: 0xc8102e, metalness: 0.5, roughness: 0.35 }),
+  prop: new THREE.MeshStandardMaterial({ color: 0xcfe3ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
+  tpu: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.95 }),
+  board: new THREE.MeshStandardMaterial({ color: 0x0f5132, roughness: 0.6 }),
+  bat: new THREE.MeshStandardMaterial({ color: 0x2f2f33, roughness: 0.7 }),
+  oled: new THREE.MeshBasicMaterial({ color: 0x7fd3ff }),
+};
+const loader = new STLLoader();
+const load = (n) => new Promise((res) => loader.load(`assembly/${n}.stl`, (g) => { g.computeVertexNormals(); res(g); }));
+const mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = o.receiveShadow = true; return o; };
+const box = (w, d, h, m) => mesh(new THREE.BoxGeometry(w, d, h), m);
+
+const robot = new THREE.Group(); scene.add(robot);
+const legs = [];
+const [gB, gD, gH, gC, gS, gF] = await Promise.all(['chassis_bottom', 'chassis_deck', 'head_shell', 'coxa', 'shin_arm', 'foot_tpu'].map(load));
+robot.add(mesh(gB, M.frame), mesh(gD, M.frame), mesh(gH, M.accent));
+// battery under the belly, FC + ESP32 on the deck, OLED face
+const bat = box(30, 56, 20, M.bat); bat.position.set(0, 0, -10); robot.add(bat);
+const fc = box(27, 27, 4, M.board); fc.position.set(0, -6, 27.5); robot.add(fc);
+const esp = box(18, 23, 3, M.board); esp.position.set(0, 22, 25); robot.add(esp);
+const face = box(22, 1, 11, M.oled); face.position.set(0, 34.6 + 0.4, 23 + 17); robot.add(face);
+for (let i = 0; i < 4; i++) {
+  const a = (45 + 90 * i) * D, hx = HIP_R * Math.cos(a), hy = HIP_R * Math.sin(a);
+  // hip servo (fixed in the body)
+  const hs = box(23, 12.4, 25, M.servo);
+  hs.position.set((HIP_R - SHAFT_OFF) * Math.cos(a), (HIP_R - SHAFT_OFF) * Math.sin(a), Z_TAB - 16 + 12.5); hs.rotation.z = a; robot.add(hs);
+  const coxa = new THREE.Group(); coxa.position.set(hx, hy, Z_HORN); robot.add(coxa);
+  coxa.add(mesh(gC, M.frame));
+  const ks = box(12.4, 26, 23, M.servo); ks.position.set(COXA_LEN, -4, COXA_T / 2 - SHAFT_OFF); coxa.add(ks);
+  const knee = new THREE.Group(); knee.position.set(COXA_LEN, 0, COXA_T / 2); coxa.add(knee);
+  knee.add(mesh(gS, M.frame));
+  const ym = (LEG_Y0 + LEG_Y1) / 2;
+  const mot = new THREE.Group(); mot.position.set(SHIN_TO_MOTOR, ym, 6); knee.add(mot);
+  const stator = mesh(new THREE.CylinderGeometry(9, 9, 7, 24), M.motor); stator.rotation.x = Math.PI / 2; stator.position.z = 3.5; mot.add(stator);
+  const bell = mesh(new THREE.CylinderGeometry(9.2, 9.2, 6, 24), M.bell); bell.rotation.x = Math.PI / 2; bell.position.z = 10; mot.add(bell);
+  const prop = mesh(new THREE.CircleGeometry(32, 48), M.prop); prop.position.z = 16; mot.add(prop);
+  const foot = mesh(gF, M.tpu); foot.position.set(92 - 4, ym, -2 - 42 + 15.6 / 2 - 4); foot.rotation.x = Math.PI; knee.add(foot);
+  legs.push({ a, coxa, knee, prop, phase: i % 2 ? Math.PI : 0 });
+}
+
+// pose: 0 = walking stance, 1 = drone
+let pose = 0, target = 0, walking = false, t = 0;
+const ui = (id) => document.getElementById(id);
+ui('walk').onclick = () => { target = 0; walking = true; };
+ui('fly').onclick = () => { target = 1; walking = false; };
+ui('tr').onclick = () => { target = target > 0.5 ? 0 : 1; walking = false; };
+ui('pose').oninput = (e) => { target = pose = +e.target.value; walking = false; };
+window.setPose = (p, walk = false, time = 0) => { pose = target = p; walking = walk; t = time; apply(); renderer.render(scene, cam); };
+window.view = (x, y, z, tx = 0, ty = 0, tz = 0) => { cam.position.set(x, y, z); ctl.target.set(tx, ty, tz); ctl.update(); renderer.render(scene, cam); };
+
+function apply() {
+  // body height: standing on the feet in walking pose, resting on the toes in drone pose
+  const knee = (1 - pose) * 90;                // degrees, 90 = shin straight down
+  for (const L of legs) {
+    let yaw = 0, k = knee;
+    if (walking && pose < 0.05) { const s = Math.sin(t * 4 + L.phase); yaw = 22 * s; k = 90 - Math.max(0, Math.cos(t * 4 + L.phase)) * 28; }
+    L.coxa.rotation.z = L.a + yaw * D;
+    L.knee.rotation.y = k * D;
+    L.prop.rotation.z = pose > 0.98 ? t * 60 : 0;
+  }
+  // height: walking feet reach 92 mm below the knee (+ boot); drone toes 15 mm below the arm
+  const z = (1 - pose) * (92 + 4 + 5 - 17.5) + pose * (2 + 42 + 1.6 - 17.5);
+  robot.position.z = z;
+}
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta(); t += dt;
+  pose += (target - pose) * Math.min(1, dt * 2.5); if (Math.abs(target - pose) < 0.002) pose = target;
+  ui('pose').value = pose;
+  apply(); renderer.render(scene, cam);
+});
+addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.ready = true;
+</script></body></html>

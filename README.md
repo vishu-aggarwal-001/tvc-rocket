@@ -1,91 +1,227 @@
-# TVC rocket
+# SkyCrawler
 
-A model rocket that keeps itself upright by steering its motor, the way real orbital rockets do. It uses an ESP32 flight computer, an MPU6050 gyro and two micro servos on a 3D-printed gimbal.
+A 3D-printed quadruped robot that walks on four legs and then folds its legs out flat to fly as a quadcopter. You control it from an Android app over WiFi.
 
-![Simulated flight](sim/tvc_sim.png)
+![Walking, transforming, flying](docs/images/hero.jpg)
 
-## How it works
+**What's in this repo**
 
-The motor sits at the bottom, so the rocket behaves like a broom balanced on your palm. Left alone, a small lean grows faster and faster. To stop that, the flight computer swings the motor a few degrees so the thrust pushes the tail back under the nose. If the nose leans right, the nozzle swings left, the exhaust pushes the tail right, and the nose comes back.
+| Folder | What it is |
+|---|---|
+| [`stl/`](stl) | Print-ready STL and STEP files, already oriented flat on the bed |
+| [`cad/skycrawler.py`](cad/skycrawler.py) | The parametric CadQuery source. Change a number and every part regenerates |
+| [`firmware/`](firmware) | ESP32-S3 code (PlatformIO) for walking, the OLED face, WiFi and flight control |
+| [`app/`](app) | Android app (Kotlin) with twin joysticks, walk tricks, hold-to-arm and calibration |
+| [`docs/viewer/`](docs/viewer) | A 3D viewer in the browser that lets you scrub between walk and fly |
+| [Releases](../../releases) | Ready-made `SkyCrawler-x.y.z.apk`, the firmware `.bin` and a zip of the STLs |
 
-Nobody can react that fast by hand, so the flight computer runs the loop 200 times a second. The IMU measures how far the rocket is tilted and how fast the tilt is changing. The computer turns that into a motor angle with this rule:
+> ⚠️ **Status: designed, not yet built.** The CAD has been checked in software for collisions across the full joint range. The firmware compiles and the APK builds. Nothing has been printed or flown yet. Fits are based on nominal MG90S dimensions, so expect to adjust tolerances once (see [Tuning the fit](#tuning-the-fit)). Please open an issue with what you find.
 
-```
-δ = Kp·θ + Kd·ω + Ki·∫θ
-```
+---
 
-θ is the tilt, ω is how fast it's tilting, and δ is how far the motor swings. Kp pushes harder the more the rocket leans. Kd works like a brake so the correction doesn't overshoot. The small Ki term cancels a steady push, such as a motor mounted a little crooked. Then two servos swing the motor in pitch and yaw.
+## How it transforms
 
-The rocket doesn't land on its engine like a Falcon 9. A small solid motor can't throttle or relight, so it comes down on a parachute fired by the motor's ejection charge.
+Each leg has two servos:
 
-## What's in here
+- **Hip (yaw):** swings the leg forward and back.
+- **Knee (pitch):** raises and lowers the lower leg. The motor sits on the lower leg.
 
-```
-cad/gimbal.py          generates the gimbal parts (change sizes at the top)
-cad/stl/               ready-to-print STL files
-firmware/tvc_flight/   ESP32 flight computer (Arduino)
-sim/tvc_sim.py         pitch simulation for tuning gains
-docs/assembly.md       printing, gimbal, servos, wiring, motor
-docs/safety-checklist.md
-docs/design-review.md  what changed after the design was attacked
-```
-
-## Parts
-
-All of this comes to roughly $70 to $115, not counting the 3D printer. Prices are approximate and vary by seller.
-
-| Part | Spec | Approx. cost (USD) |
+| | Knee angle | What the lower leg does |
 |---|---|---|
-| Flight computer | ESP32 dev board (a Teensy 4.0 also works, with code changes) | 8 |
-| IMU | MPU6050 breakout board (GY-521) | 3 to 5 |
-| Servos (2) | MG90S metal-gear 9 g micro servos | 8 to 10 |
-| Power | 2S LiPo, 300 to 500 mAh, plus a 5 V 3 A BEC and a 470 µF capacitor | 12 to 20 |
-| Gimbal parts | The STL files in `cad/stl`, printed in PETG or ASA | 3 to 5 |
-| Hardware | M3 bolts, 1.5 mm steel wire pushrods, M2 servo screws | 5 to 8 |
-| Motor | Certified 24 mm solid motor, average thrust at least 3 × rocket weight | 15 to 30 |
-| Recovery | Parachute and wadding | 15 to 25 |
-| Safety | Arming switch, status LED, buzzer | 3 |
-| Airframe | Body tube, 65 mm inside diameter (or change `body_id` in `gimbal.py`) | varies |
+| **Walking** | about 90° | Points down. The toe is the foot |
+| **Flying** | 0° | Level. It rests on a hard **end stop** and becomes a drone arm. The toe now points down and works as landing gear |
 
-Pick the motor from the maker's data sheet and follow your country's rocketry rules (NAR or Tripoli in the US). Never modify a motor.
+To switch to flying, the robot sits down, lowers each arm onto its stop and **switches the knee servos off**. From then on, propeller thrust pushes the arm *into* the stop. A magnet pair holds it there when the props are idle. The servos carry no load in flight, so they don't buzz, heat up or wobble.
 
-## Gimbal parts
+## What's better than the robot in the video
 
-| File | What it does |
+| Problem | SkyCrawler fix |
 |---|---|
-| `motor_sleeve.stl` | Holds the motor. A lip at the front takes the thrust and lets the ejection gas through. Tilts about X. |
-| `inner_ring.stl` | Carries the sleeve and tilts about Y. |
-| `outer_mount.stl` | Glued into the body tube. Holds the ring. |
-| `servo_plate.stl` | Holds both servos above the gimbal. |
+| The hip servo's output shaft carries the whole arm (thrust, crashes, bending) | **Dual-support hip:** a Ø6 mm pin on top of each upper leg turns in a bushing in the deck plate, so bending loads go into the body instead of the servo gears |
+| Arms flop or vibrate in flight | **Positive end stop**, plus a **6×3 mm magnet** to hold the arm and an **M3 levelling screw** to set each arm exactly level |
+| The battery hangs below the feet, so landings smash it | The **42 mm toe** clears the belly battery in drone mode. A **TPU boot** grips when walking and cushions landings |
+| Flight is either bolted-on or homemade | A real **Betaflight** flight controller does the stabilizing. The ESP32 talks to it as a CRSF receiver, so you get angle mode, auto-level, failsafe auto-land and a voltage readout |
+| Only one motor size fits | Both **9×9 and 12×12 mm** M2 motor patterns are drilled, so 1104 to 1404 class motors fit |
+| No personality | **OLED face** with 8 moods, blinking, battery-sad face and status text, plus cat ears |
 
-The parts clear each other across ±8° on both axes. The firmware stops at 5°.
+---
 
-## Getting started
+## Parts list (BOM)
 
-1. Tune in the sim first. Put your rocket's mass, pivot-to-CG distance and motor thrust curve into `sim/tvc_sim.py`, then run:
-   ```
-   pip install -r sim/requirements.txt
-   python sim/tvc_sim.py --sweep
-   python sim/tvc_sim.py
-   ```
-2. Print and build the gimbal by following `docs/assembly.md`.
-3. Flash the firmware. In the Arduino IDE, install the ESP32 board package and the ESP32Servo library, open `firmware/tvc_flight/tvc_flight.ino`, copy your gains into `config.h` and upload.
-4. Bench test with no motor. Open the serial monitor at 115200, send `b`, tilt the rocket by hand and make sure the nozzle swings the right way on both axes. Wrong servo direction is the most common way these rockets crash.
-5. Fly, using `docs/safety-checklist.md`. After landing, send `d` to get the flight log as CSV.
+Prices are rough 2026 AliExpress/Amazon prices in USD.
 
-## Flight sequence
+| Qty | Part | Notes | ~$ |
+|---|---|---|---|
+| 8 | **MG90S** metal-gear micro servo | Comes with cross horns | 20 |
+| 1 | **ESP32-S3 SuperMini** | The brain | 5 |
+| 1 | **F4 AIO 1S–3S whoop FC with 4-in-1 ESC** (20×20 or 25.5 mm whoop pattern, e.g. BetaFPV F4 2-3S 20A AIO or HappyModel X12) | Any Betaflight 4.x board with a free UART | 35 |
+| 4 | **1204 / 1303 brushless motor, about 5000 KV** (or 1104 7500 KV for 2S) | 9×9 or 12×12 M2 pattern | 32 |
+| 4 | **2.5" (63 mm) 3-blade props** | 1.5 mm or matching shaft, 2 CW and 2 CCW | 3 |
+| 1 | **3S 450–550 mAh LiPo**, XT30 | Strapped under the belly | 12 |
+| 1 | **5 V 5 A UBEC** | Powers the servos and the ESP32. Do **not** use the FC's 5 V for the servos | 5 |
+| 1 | **SSD1306 0.96" I²C OLED** (128×64) | The face | 3 |
+| 1 | Active 5 V buzzer | Optional | 1 |
+| 1 | 100 kΩ + 22 kΩ resistors | Battery-voltage divider | — |
+| 4 | **6×3 mm N52 magnet pairs** | Knee stops (8 magnets in total) | 3 |
+| 4 | M3×10 set screw or bolt | Knee levelling screws | — |
+| ~40 | M2×6 / M2×8 screws, M2.5 for the servos, M3×6 | | 4 |
+| — | PETG or ASA filament (~80 g), TPU 95A (~5 g) | | 3 |
+| | | **Total** | **≈ $125** |
 
-The flight computer never lights the motor. You launch with a normal model rocket launch controller.
+Estimated flying weight is about **300 g** with a 3S 450 (the eight servos alone are about 107 g). With four 1204 5000 KV motors on 2.5" props and 3S, expect a thrust-to-weight ratio of about **2:1**. That is plenty for gentle flying. With 1104 motors on 2S it's about 1.4:1, which is only just flyable.
 
-| State | What happens |
+---
+
+## Printing
+
+All files in `stl/` are already oriented flat.
+
+| Part | Qty | Material | Settings |
+|---|---|---|---|
+| `chassis_bottom` | 1 | PETG/ASA | 3 walls, 30 % gyroid, no supports |
+| `chassis_deck` | 1 | PETG/ASA | 3 walls, 30 %, no supports |
+| `head_shell` | 1 | PETG/PLA | 2 walls, 10 % (it's only a cover) |
+| `coxa` (upper leg) | 4 | PETG/ASA | **4 walls, 40 %**, supports for the knee-servo frame and the stop ledge |
+| `shin_arm` (lower leg / drone arm) | 4 | PETG/ASA | **4 walls, 40 %**, supports under the motor pad and toe |
+| `foot_tpu` | 4 | TPU 95A | 2 walls, 20 % |
+| `leg_spacer` | 0–4 | any | Only if your horns sit low (see below) |
+
+PLA works for a walking-only test. For flying, use PETG or ASA, because PLA arms crack on the first hard landing.
+
+## Wiring
+
+```
+3S LiPo ──XT30──┬── FC (AIO) ── 4 motors
+                ├── 5 V 5 A UBEC ──┬── 8 servos (V+ / GND)
+                │                  └── ESP32-S3 5V pin
+                └── 100k ──┬── 22k ── GND
+                         GPIO1 (battery sense, backup to FC telemetry)
+```
+
+| ESP32-S3 pin | Goes to |
 |---|---|
-| DISARMED | Arm switch open. Serial commands work. |
-| CALIBRATING | Arm switch closed. Measures gyro bias over 2 s and starts over if the rocket moves. |
-| ARMED | Watches for liftoff (over 2.5 g for 20 ms). |
-| POWERED | Steers the motor. Tilt comes from the gyro only, because the accelerometer reads thrust in flight. |
-| COAST | Burnout detected. Motor centered and logging continues. |
-| ABORTED | Tilt passed 30°. Stops steering and centers the motor. |
+| GPIO 2 / 3 / 4 / 5 | Hip servo signal: front-right, front-left, back-left, back-right |
+| GPIO 6 / 7 / 8 / 9 | Knee servo signal (same leg order) |
+| GPIO 10 / 11 | OLED SDA / SCL |
+| GPIO 12 | Buzzer + |
+| GPIO 43 (TX) | FC **RX** pad of the UART you set to Serial RX |
+| GPIO 44 (RX) | FC **TX** pad of the same UART (telemetry) |
+| GPIO 1 | Battery divider midpoint |
+| GND | **Common ground with the FC and the UBEC (required)** |
 
-## License
+Pins can be changed in [`firmware/src/config.h`](firmware/src/config.h).
 
-MIT
+## Assembly
+
+See **[docs/assembly.md](docs/assembly.md)**. In short:
+
+1. Centre all servos.
+2. Fit the hip servos into the bottom plate.
+3. Fit the upper legs onto the horns, with the pins up through the deck.
+4. Fit the knee servos, then the lower legs.
+5. Fit the magnets.
+6. Fit the electronics.
+7. Calibrate in the app.
+8. Level the arms with the M3 screws.
+
+## Flight controller setup
+
+See **[docs/betaflight.md](docs/betaflight.md)**. It covers the exact CLI commands: CRSF on a UART, the AUX1 arm / AUX2 angle / AUX3 beeper modes, failsafe auto-land, DShot, and motor order and direction.
+
+## Flashing the firmware
+
+**Easiest:** download `skycrawler-esp32s3-full.bin` from Releases. Then either:
+
+- open <https://espressif.github.io/esptool-js/> in Chrome, connect, and flash it at offset **0x0**, or
+- run:
+  ```
+  esptool.py --chip esp32s3 write_flash 0x0 skycrawler-esp32s3-full.bin
+  ```
+
+**From source:**
+```
+cd firmware
+pio run -t upload
+```
+
+Change `AP_PASS` in `config.h` before you build.
+
+## The app
+
+Install `SkyCrawler-x.y.z.apk` from Releases. Android 8 or newer is required, and you need to allow "install unknown apps". To build it yourself:
+
+```
+cd app
+./gradlew assembleRelease
+```
+
+The APK lands in `app/build/outputs/apk/release/`. To sign it with your own key, set the `SKY_KEYSTORE`, `SKY_KEYSTORE_PASSWORD`, `SKY_KEY_ALIAS` and `SKY_KEY_PASSWORD` environment variables.
+
+1. Power the robot. The face wakes up and shows `SkyCrawler-XXXX`.
+2. Tap **Connect**. Android asks to join the robot's WiFi; the default password is `skycrawler`.
+3. **Walk panel:**
+   - The left stick walks and turns.
+   - The right stick tilts and raises the body.
+   - Other controls: Stand, Sit, creep/trot gait, Wave, Dance, Bow, Face.
+4. **Transform → drone:** the robot sits, lays its arms on the stops and relaxes the knees. The fly panel appears.
+5. **Fly panel:**
+   - Left stick is throttle and yaw (throttle doesn't spring back).
+   - Right stick is pitch and roll.
+   - **Hold ARM for 1 s** to arm. The robot refuses to arm unless it has finished transforming into fly mode, the throttle is low and the battery is OK.
+6. **⚙ Settings:** per-servo trims (saved on the robot), *Centre all servos* for assembly, and *Relax*.
+
+### Safety built into the firmware
+
+- If WiFi drops while armed, the ESP32 stops sending CRSF frames and Betaflight's failsafe **auto-lands**.
+- You can't switch to walking while armed.
+- The knees are switched off in flight, so a servo glitch can't move an arm.
+- The battery-low check blocks arming, and the face goes sad when the battery is low.
+
+Read [docs/safety.md](docs/safety.md) before the first flight. **Always take the props off** for setup and calibration.
+
+## Tuning the fit
+
+Everything is in `cad/skycrawler.py`. Install CadQuery and regenerate:
+
+```
+pip install cadquery
+python cad/skycrawler.py
+```
+
+The output goes to `stl/` and `docs/viewer/assembly/`.
+
+| If… | Change |
+|---|---|
+| Servos are too tight or loose in their slots | `SERVO['L']`, `SERVO['W']` (+0.2 mm per step) |
+| The horn doesn't sit flush in the leg's pocket | Print `leg_spacer`, or edit the horn pocket in `coxa()` / `shin()` |
+| You use a different motor | `MOTOR_HOLES`, `SHIN_TO_MOTOR` (prop clearance) |
+| You want longer legs or a taller stance | `SHIN_LEN`, `TOE_LEN`, `COXA_LEN` |
+| Your FC uses the 25.5 mm whoop pattern | `FC_PATTERN` |
+
+The 3D viewer (`docs/viewer/index.html`) needs to be served, not opened as a file:
+
+```
+python -m http.server
+```
+
+Then open `localhost:8000/docs/viewer/`.
+
+## How the code is laid out
+
+```
+firmware/src/
+  main.cpp     mode machine: SIT, STAND, TO_FLY, FLY, TO_WALK, TRICK; arming interlocks; telemetry
+  servos.cpp   rate-limited servo targets, trims in flash, relaxing the knees
+  gait.cpp     creep (3 feet always down) and trot gaits, body height/tilt
+  crsf.cpp     CRSF RC-channel frames to the FC at 100 Hz; battery and attitude telemetry back
+  face.cpp     SSD1306 eyes and moods
+  net.cpp      WiFi access point, WebSocket :81, status page :80
+app/app/src/main/java/com/skycrawler/app/
+  MainActivity.kt  UI, both panels, settings
+  RobotLink.kt     joins the robot's WiFi and keeps a WebSocket alive
+  JoystickView.kt  joystick control
+```
+
+## Licence
+
+MIT. See [LICENSE](LICENSE). The bundled three.js in `docs/viewer/three/` is MIT, © three.js authors.

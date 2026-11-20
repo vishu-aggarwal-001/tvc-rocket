@@ -1,45 +1,86 @@
 # Assembly
 
-## Printing
+You'll need the parts from the README BOM, a small Phillips driver, 1.5 and 2 mm hex keys, a soldering iron, CA glue and zip ties.
 
-Print all four parts in PETG or ASA. PLA softens in a hot car and too close to a motor case. Use 0.2 mm layers, 4 walls and 40% infill. The parts are oriented flat in the STL files, so no supports should be needed. The motor sleeve prints standing up, with the nozzle end down.
+**Leg names** (seen from above, face at the front):
 
-If your body tube or motor isn't the default size (65 mm inside diameter, 24 mm motor), change the numbers at the top of `cad/gimbal.py` and run it again:
+| Leg | Number |
+|---|---|
+| FR | 0 |
+| FL | 1 |
+| BL | 2 |
+| BR | 3 |
 
-```
-pip install manifold3d trimesh numpy
-python cad/gimbal.py
-```
+## 0. Centre every servo first
 
-## Gimbal
+1. Flash the firmware and power the ESP32 from the UBEC with **all servos plugged in and no horns fitted**.
+2. Connect the app and tap **⚙ → Centre all servos**. Every servo goes to its middle position, 1500 µs, and stays there.
+   - Without the app: join the robot's WiFi and open `http://192.168.4.1/`, then tap *Centre all servos*.
+3. Leave it powered while you fit the horns. **Sit** or **Stand** leaves this service mode.
 
-1. Slide the motor sleeve into the inner ring. Line up the sleeve's two side bosses with the ring's X holes. From outside the ring, run an M3 × 8 bolt through each hole and into the boss. The bolt cuts its own thread in the plastic. Stop when the sleeve swings freely with no wobble.
-2. Put the inner ring inside the outer mount and line up the Y holes. Run M3 × 10 bolts through the mount wall and into the ring bosses. The counterbores keep the bolt heads flush.
-3. Both axes should now swing smoothly by hand. If anything rubs, sand it. Don't drill the holes bigger.
+The firmware maps its angles so that:
 
-## Servos and pushrods
+- **hip 0° = servo centre**
+- **knee 45° = servo centre**, halfway between drone (0°) and standing (90°)
 
-1. Push the two MG90S servos into the servo plate pockets and screw them in with their M2 screws. The pitch servo goes in the pocket on the +X side, and the yaw servo goes on the +Y side.
-2. Glue the outer mount into the bottom of the body tube. Glue the servo plate about 65 mm above the top edge of the mount, so the servo bodies hanging under the plate clear the top of the swinging sleeve. Turn the plate so its pockets line up with the lugs: the pitch servo over the ring lug and the yaw servo over the sleeve lug.
-3. Center both servos first (send `c` over serial), then fit the horns as close to straight across as you can.
-4. Bend 1.5 mm steel wire into pushrods with a Z-bend at each end. One runs from the pitch horn to the ring lug and the other from the yaw horn to the sleeve lug. Adjust the length until the motor hangs straight with the servos centered. Then fine-tune with `PITCH_TRIM_US` and `YAW_TRIM_US` in `config.h`.
+This way both ends of the knee's travel stay well inside the servo's range.
 
-## Electronics
+## 1. Hips
 
-```
-2S LiPo ── arming switch ── 5 V 3 A BEC ──┬── servo +5 V (both)  + 470 µF cap
-                                         └── ESP32 5V / VIN
-ESP32 GND ── BEC GND ── servo GND ── MPU6050 GND
-ESP32 3V3 ── MPU6050 VCC
-GPIO21 ── MPU6050 SDA      GPIO22 ── MPU6050 SCL
-GPIO25 ── pitch servo signal
-GPIO26 ── yaw servo signal
-GPIO27 ── arm switch to GND (second pole, or a separate switch)
-GPIO2  ── status LED       GPIO4 ── buzzer
-```
+1. Push the 4 hip servos down into the slots in `chassis_bottom`, with the shafts pointing up. Use the 2 M2 screws that came with each servo.
+2. Snap a cross horn onto each hip shaft. Don't screw it yet.
 
-Mount the MPU6050 firmly with screws, not tape, near the middle of the rocket. Its Z axis points to the nose and its X and Y axes line up with the gimbal axes. If your board sits differently, remap the axes in `config.h`.
+## 2. Upper legs (coxa)
 
-## Motor
+1. With the servo at centre, press the `coxa` root onto the horn so that the leg points **straight out along the diagonal**.
+2. Screw the horn arms through the two Ø1.8 holes with M2×6 screws, then add the centre horn screw.
+3. Put the `chassis_deck` on top. Each coxa's Ø6 pin goes up through a bushing in the deck.
+4. Screw the deck onto the 4 pillars with M3×6 screws.
 
-Push the motor into the sleeve until it seats on the forward lip. Then wrap tape around the joint at the nozzle end or add a clip so the ejection charge can't push the motor out the back. Choose a motor with a delay that fires the ejection near the top of the flight.
+The pin must turn freely. If it binds, ream the bushing with a 6.5 mm drill by hand.
+
+## 3. Knee servos
+
+1. Slide each knee servo through the frame at the end of the coxa so that the shaft points **outward**, away from the body. Screw it in with M2.
+2. Fit a cross horn and centre it.
+3. Press the `shin_arm` root onto the horn with the shin at **45° down**, which is the knee's centre position. Screw it on.
+
+If the horn sits below flush, add a `leg_spacer`.
+
+## 4. End stops, magnets and levelling
+
+1. Glue a 6×3 magnet into the ledge pocket on each coxa and another into the matching pocket under each shin tail. **Check the polarity so they attract.**
+2. Run an M3 screw up through the ledge. This is the levelling screw.
+3. Later, in drone pose, turn it until the arm is exactly level.
+
+## 5. Motors and feet
+
+1. Bolt each motor onto the pad with M2 screws from below. Both 9×9 and 12×12 patterns are drilled.
+2. Run the motor wires along the shin's lower edge and through the wire channel, leaving slack around the knee. Use a zip tie at the coxa.
+3. Push a TPU `foot_tpu` boot onto each toe.
+
+## 6. Electronics
+
+1. Mount the FC on the 20×20 standoffs in the deck with M2 screws and soft grommets, **arrow towards the face**.
+2. Zip-tie the ESP32-S3 into the deck slots.
+3. Mount the UBEC under the deck.
+4. Glue the OLED behind the window in `head_shell`.
+5. Wire everything according to the table in the README.
+6. Put a 3-pin header strip on a small perfboard as a **servo power bus**:
+   - all servo V+ to UBEC 5 V
+   - all servo GND to UBEC GND, which is joined to the FC and ESP32 grounds
+   - signals to the ESP32 pins
+7. Strap the battery under the belly through the slots in `chassis_bottom`.
+8. Clip the head shell on.
+
+## 7. Calibrate (props off)
+
+1. Connect the app and press **Stand**.
+2. Open **⚙**. Nudge each hip until every leg is square to the body, and each knee until every shin is vertical. Save.
+3. Press **Transform → drone**. All four arms should come down onto their stops at the same time.
+4. Turn the M3 levelling screws until the arms are level. Use a phone spirit-level app on each arm.
+5. Press **Walk** to unfold, then try walking on carpet.
+
+## 8. Before flying
+
+Do the [Betaflight setup](betaflight.md) and the [safety checklist](safety.md).
